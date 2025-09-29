@@ -1,0 +1,187 @@
+x-svc-env: &svc_env
+  OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
+  OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    ports:
+      - "8081:8080"
+
+  kong:
+    image: kong:latest
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_LISTEN: "0.0.0.0:8000"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
+      KONG_LOG_LEVEL: notice
+    volumes:
+      - ./kong/kong.yml:/kong/kong.yml:ro
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    depends_on:
+      - keycloak
+
+  # -------- Services --------
+  profile:
+    build: ./services/profile
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-profile
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      - otel-collector
+      - cockroach-init
+      - redis
+      - redpanda
+
+  payment:
+    build: ./services/payment
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-payment
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+
+  ledger:
+    build: ./services/ledger
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-ledger
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+
+  wallet:
+    build: ./services/wallet
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-wallet
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+
+  rule-engine:
+    build: ./services/rule-engine
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-rules
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+
+  forex:
+    build: ./services/forex
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-forex
+      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+
+  
+  cockroach1:
+    image: cockroachdb/cockroach:v24.2.5
+    command: start --insecure --listen-addr=cockroach1:26257 --http-addr=cockroach1:8080 --join=cockroach1,cockroach2,cockroach3
+    ports:
+      - "26257:26257"   # SQL
+      - "8082:8080"     # Admin UI (node1)
+    volumes:
+      - cockroach1:/cockroach/cockroach-data
+
+  cockroach2:
+    image: cockroachdb/cockroach:v24.2.5
+    command: start --insecure --listen-addr=cockroach2:26257 --http-addr=cockroach2:8080 --join=cockroach1,cockroach2,cockroach3
+    volumes:
+      - cockroach2:/cockroach/cockroach-data
+    depends_on: [cockroach1]
+
+  cockroach3:
+    image: cockroachdb/cockroach:v24.2.5
+    command: start --insecure --listen-addr=cockroach3:26257 --http-addr=cockroach3:8080 --join=cockroach1,cockroach2,cockroach3
+    volumes:
+      - cockroach3:/cockroach/cockroach-data
+    depends_on: [cockroach1, cockroach2]
+
+  # One-time init job to create app database(s) and users (optional)
+  cockroach-init:
+    image: cockroachdb/cockroach:v24.2.5
+    command: >
+      sh -c "
+      /cockroach/cockroach sql --insecure --host=cockroach1:26257 -e
+      \"CREATE DATABASE IF NOT EXISTS innover;
+         CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass';
+         GRANT ALL ON DATABASE innover TO fin;\"
+      "
+    depends_on: [cockroach1, cockroach2, cockroach3]
+    restart: "no"
+
+  # Redis (cache / Celery)
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  # Redpanda (Kafka-compatible)
+  redpanda:
+    image: redpandadata/redpanda:v24.2.13
+    command:
+      - redpanda start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 512M
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - "PLAINTEXT://0.0.0.0:9092"
+      - --advertise-kafka-addr
+      - "PLAINTEXT://redpanda:9092"
+      - --rpc-addr
+      - "0.0.0.0:33145"
+      - --advertise-rpc-addr
+      - "redpanda:33145"
+    ports:
+      - "9092:9092"   # Kafka
+    volumes:
+      - redpanda:/var/lib/redpanda/data
+
+volumes:
+  cockroach1:
+  cockroach2:
+  cockroach3:
+  redpanda:

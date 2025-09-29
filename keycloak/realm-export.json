@@ -1,0 +1,54 @@
+{
+    "realm": "innover",
+    "enabled": true,
+    "loginWithEmailAllowed": true,
+    "resetPasswordAllowed": true,
+    "requiredActions": [
+    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": false, "priority": 10 }
+    ],
+    "roles": { "realm": [ {"name": "admin"}, {"name": "ops_user"}, {"name": "finance"}, {"name": "auditor"}, {"name": "user"} ] },
+    "clients": [
+    {
+    "clientId": "kong",
+    "name": "Kong Gateway",
+    "enabled": true,
+    "protocol": "openid-connect",
+    "publicClient": false,
+    "secret": "kong-secret",
+    "redirectUris": ["http://localhost:8000/*"],
+    "webOrigins": ["+"],
+    "standardFlowEnabled": true,
+    "directAccessGrantsEnabled": false,
+    "attributes": { "post.logout.redirect.uris": "http://localhost:8000/*" }
+    }
+    ],
+    "authenticationFlows": [
+    {
+    "alias": "innover-browser",
+    "description": "Default browser: username+password; OTP optional",
+    "providerId": "basic-flow",
+    "topLevel": true,
+    "builtIn": false,
+    "authenticationExecutions": [
+    {"authenticator": "auth-cookie", "requirement": "ALTERNATIVE", "priority": 10},
+    {"authenticator": "identity-provider-redirector", "requirement": "ALTERNATIVE", "priority": 20},
+    {"authenticator": "auth-username-password-form", "requirement": "REQUIRED", "priority": 30},
+    {"authenticator": "auth-otp-form", "requirement": "CONDITIONAL", "priority": 40}
+    ]
+    },
+    {
+    "alias": "innover-browser-otp",
+    "description": "Step-up browser: OTP required",
+    "providerId": "basic-flow",
+    "topLevel": true,
+    "builtIn": false,
+    "authenticationExecutions": [
+    {"authenticator": "auth-cookie", "requirement": "ALTERNATIVE", "priority": 10},
+    {"authenticator": "identity-provider-redirector", "requirement": "ALTERNATIVE", "priority": 20},
+    {"authenticator": "auth-username-password-form", "requirement": "REQUIRED", "priority": 30},
+    {"authenticator": "auth-otp-form", "requirement": "REQUIRED", "priority": 40}
+    ]
+    }
+    ],
+    "browserFlow": "innover-browser"
+    }

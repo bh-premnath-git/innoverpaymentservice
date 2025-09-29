@@ -1,0 +1,64 @@
+_format_version: "3.0"
+- name: ledger
+paths: [ /api/ledger ]
+strip_path: false
+plugins:
+- name: openid-connect
+config:
+issuer: http://keycloak:8080/realms/innover
+client_id: kong
+client_secret: ${KONG_OIDC_CLIENT_SECRET}
+scopes: [ "openid" ]
+upstream_headers_claims: [ "sub", "preferred_username" ]
+upstream_headers_names: [ "x-sub", "x-username" ]
+
+
+- name: wallet-svc
+url: http://wallet:8000
+routes:
+- name: wallet
+paths: [ /api/wallet ]
+strip_path: false
+plugins:
+- name: openid-connect
+config:
+issuer: http://keycloak:8080/realms/innover
+client_id: kong
+client_secret: ${KONG_OIDC_CLIENT_SECRET}
+scopes: [ "openid" ]
+upstream_headers_claims: [ "sub", "preferred_username" ]
+upstream_headers_names: [ "x-sub", "x-username" ]
+
+
+- name: rule-engine-svc
+url: http://rule-engine:8000
+routes:
+- name: rules
+paths: [ /api/rules ]
+strip_path: false
+plugins:
+- name: openid-connect
+config:
+issuer: http://keycloak:8080/realms/innover
+client_id: kong
+client_secret: ${KONG_OIDC_CLIENT_SECRET}
+scopes: [ "openid" ]
+upstream_headers_claims: [ "sub", "preferred_username" ]
+upstream_headers_names: [ "x-sub", "x-username" ]
+
+
+- name: forex-svc
+url: http://forex:8000
+routes:
+- name: forex
+paths: [ /api/fx ]
+strip_path: false
+plugins:
+- name: openid-connect
+config:
+issuer: http://keycloak:8080/realms/innover
+client_id: kong
+client_secret: ${KONG_OIDC_CLIENT_SECRET}
+scopes: [ "openid" ]
+upstream_headers_claims: [ "sub", "preferred_username" ]
+upstream_headers_names: [ "x-sub", "x-username" ]
