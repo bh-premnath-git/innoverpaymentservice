@@ -4,67 +4,129 @@
     "loginWithEmailAllowed": true,
     "resetPasswordAllowed": true,
     "requiredActions": [
-    { "alias": "CONFIGURE_TOTP", "name": "Configure OTP", "enabled": true, "defaultAction": false, "priority": 10 }
+        {
+            "alias": "CONFIGURE_TOTP",
+            "name": "Configure OTP",
+            "enabled": true,
+            "defaultAction": false,
+            "priority": 10
+        }
     ],
-    "roles": { "realm": [ {"name": "admin"}, {"name": "ops_user"}, {"name": "finance"}, {"name": "auditor"}, {"name": "user"} ] },
+    "roles": {
+        "realm": [
+            {
+                "name": "admin"
+            },
+            {
+                "name": "ops_user"
+            },
+            {
+                "name": "finance"
+            },
+            {
+                "name": "auditor"
+            },
+            {
+                "name": "user"
+            }
+        ]
+    },
     "clients": [
-    {
-    "clientId": "kong",
-    "name": "Kong Gateway",
-    "enabled": true,
-    "protocol": "openid-connect",
-    "publicClient": false,
-    "secret": "kong-secret",
-    "redirectUris": ["http://localhost:8000/*"],
-    "webOrigins": ["+"],
-    "standardFlowEnabled": true,
-    "directAccessGrantsEnabled": false,
-    "attributes": { "post.logout.redirect.uris": "http://localhost:8000/*" },
-    "protocolMappers": [
-    {
-    "name": "preferred username",
-    "protocol": "openid-connect",
-    "protocolMapper": "oidc-usermodel-property-mapper",
-    "consentRequired": false,
-    "config": {
-    "userinfo.token.claim": "true",
-    "user.attribute": "username",
-    "id.token.claim": "true",
-    "access.token.claim": "true",
-    "claim.name": "preferred_username",
-    "jsonType.label": "String"
-    }
-    }
-    ]
-    }
+        {
+            "clientId": "kong",
+            "name": "Kong Gateway",
+            "enabled": true,
+            "protocol": "openid-connect",
+            "publicClient": false,
+            "secret": "kong-secret",
+            "redirectUris": [
+                "http://localhost:8000/*"
+            ],
+            "webOrigins": [
+                "+"
+            ],
+            "standardFlowEnabled": true,
+            "directAccessGrantsEnabled": false,
+            "attributes": {
+                "post.logout.redirect.uris": "http://localhost:8000/*"
+            },
+            "protocolMappers": [
+                {
+                    "name": "preferred username",
+                    "protocol": "openid-connect",
+                    "protocolMapper": "oidc-usermodel-property-mapper",
+                    "consentRequired": false,
+                    "config": {
+                        "userinfo.token.claim": "true",
+                        "user.attribute": "username",
+                        "id.token.claim": "true",
+                        "access.token.claim": "true",
+                        "claim.name": "preferred_username",
+                        "jsonType.label": "String"
+                    }
+                }
+            ]
+        }
     ],
     "authenticationFlows": [
-    {
-    "alias": "innover-browser",
-    "description": "Default browser: username+password; OTP optional",
-    "providerId": "basic-flow",
-    "topLevel": true,
-    "builtIn": false,
-    "authenticationExecutions": [
-    {"authenticator": "auth-cookie", "requirement": "ALTERNATIVE", "priority": 10},
-    {"authenticator": "identity-provider-redirector", "requirement": "ALTERNATIVE", "priority": 20},
-    {"authenticator": "auth-username-password-form", "requirement": "REQUIRED", "priority": 30},
-    {"authenticator": "auth-otp-form", "requirement": "CONDITIONAL", "priority": 40}
-    ]
-    },
-    {
-    "alias": "innover-browser-otp",
-    "description": "Step-up browser: OTP required",
-    "providerId": "basic-flow",
-    "topLevel": true,
-    "builtIn": false,
-    "authenticationExecutions": [
-    {"authenticator": "auth-cookie", "requirement": "ALTERNATIVE", "priority": 10},
-    {"authenticator": "identity-provider-redirector", "requirement": "ALTERNATIVE", "priority": 20},
-    {"authenticator": "auth-username-password-form", "requirement": "REQUIRED", "priority": 30},
-    {"authenticator": "auth-otp-form", "requirement": "REQUIRED", "priority": 40}
-    ]
-    }
+        {
+            "alias": "innover-browser",
+            "description": "Default browser: username+password; OTP optional",
+            "providerId": "basic-flow",
+            "topLevel": true,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "auth-cookie",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 10
+                },
+                {
+                    "authenticator": "identity-provider-redirector",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 20
+                },
+                {
+                    "authenticator": "auth-username-password-form",
+                    "requirement": "REQUIRED",
+                    "priority": 30
+                },
+                {
+                    "authenticator": "auth-otp-form",
+                    "requirement": "CONDITIONAL",
+                    "priority": 40
+                }
+            ]
+        },
+        {
+            "alias": "innover-browser-otp",
+            "description": "Step-up browser: OTP required",
+            "providerId": "basic-flow",
+            "topLevel": true,
+            "builtIn": false,
+            "authenticationExecutions": [
+                {
+                    "authenticator": "auth-cookie",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 10
+                },
+                {
+                    "authenticator": "identity-provider-redirector",
+                    "requirement": "ALTERNATIVE",
+                    "priority": 20
+                },
+                {
+                    "authenticator": "auth-username-password-form",
+                    "requirement": "REQUIRED",
+                    "priority": 30
+                },
+                {
+                    "authenticator": "auth-otp-form",
+                    "requirement": "REQUIRED",
+                    "priority": 40
+                }
+            ]
+        }
     ],
     "browserFlow": "innover-browser"
-    }
+}
