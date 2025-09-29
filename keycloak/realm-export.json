@@ -19,7 +19,23 @@
     "webOrigins": ["+"],
     "standardFlowEnabled": true,
     "directAccessGrantsEnabled": false,
-    "attributes": { "post.logout.redirect.uris": "http://localhost:8000/*" }
+    "attributes": { "post.logout.redirect.uris": "http://localhost:8000/*" },
+    "protocolMappers": [
+    {
+    "name": "preferred username",
+    "protocol": "openid-connect",
+    "protocolMapper": "oidc-usermodel-property-mapper",
+    "consentRequired": false,
+    "config": {
+    "userinfo.token.claim": "true",
+    "user.attribute": "username",
+    "id.token.claim": "true",
+    "access.token.claim": "true",
+    "claim.name": "preferred_username",
+    "jsonType.label": "String"
+    }
+    }
+    ]
     }
     ],
     "authenticationFlows": [
