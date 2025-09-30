@@ -39,7 +39,7 @@ services:
       KONG_LOG_LEVEL: notice
       KONG_PLUGINS: "bundled,openid-connect"
       KONG_LUA_PACKAGE_PATH: "/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua;;"
-      KONG_OIDC_CLIENT_SECRET: ${KONG_OIDC_CLIENT_SECRET:-changeme}
+      KONG_OIDC_CLIENT_SECRET: ${KONG_OIDC_CLIENT_SECRET:-kong-secret}
     volumes:
       - ./kong/kong.yml:/kong/kong.yml:ro
     ports:
