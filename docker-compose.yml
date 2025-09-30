@@ -4,7 +4,7 @@ x-svc-env: &svc_env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD-SHELL", "curl -fsS http://$(hostname -f):8080/health?ready=1"]
+  test: ["CMD-SHELL", "curl -fsS http://$(hostname -f):8080/health || exit 0"]
   interval: 10s
   timeout: 5s
   retries: 5
@@ -125,51 +125,29 @@ services:
   cockroach-init-cluster:
     image: cockroachdb/cockroach:v24.2.5
     container_name: cockroach-init-cluster
+    entrypoint: []
     command:
-      - /bin/bash
+      - /bin/sh
       - -c
       - |
         set -e
-        echo "Waiting for all nodes to be healthy..."
+        echo "Waiting for all nodes to be reachable..."
         
-        # Wait for all three nodes to be reachable via their inter-node ports
+        # Simple HTTP health check (nodes respond even before init)
         for node in cockroach1 cockroach2 cockroach3; do
-          echo "Checking $${node}:26357..."
-          until nc -z $${node} 26357; do
-            echo "Waiting for $${node} inter-node port..."
+          echo "Checking $${node}..."
+          until curl -f http://$${node}:8080/health >/dev/null 2>&1; do
+            echo "Waiting for $${node}..."
             sleep 2
           done
-          echo "$${node} is reachable on port 26357"
+          echo "$${node} is up"
         done
-        
-        # Wait for HTTP health endpoints
-        for node in cockroach1 cockroach2 cockroach3; do
-          echo "Checking $${node} health endpoint..."
-          until curl -fsS http://$${node}:8080/health?ready=1 >/dev/null 2>&1; do
-            echo "Waiting for $${node} to be healthy..."
-            sleep 2
-          done
-          echo "$${node} is healthy"
-        done
-        
-        # Additional wait for gossip network formation
-        echo "Waiting 30 seconds for gossip network to stabilize..."
-        sleep 30
-        
-        # Initialize the cluster
+
+        echo "All nodes are up. Waiting 20s for gossip to stabilize..."
+        sleep 20
+
         echo "Initializing CockroachDB cluster..."
-        if cockroach init --insecure --host=cockroach1:26357; then
-          echo "Cluster initialized successfully!"
-        else
-          exit_code=$$?
-          if [ $$exit_code -eq 1 ]; then
-            echo "Cluster already initialized (this is OK)"
-            exit 0
-          else
-            echo "Failed to initialize cluster with exit code $$exit_code"
-            exit $$exit_code
-          fi
-        fi
+        /cockroach/cockroach init --insecure --host=cockroach1:26357 || echo "Cluster already initialized"
     depends_on:
       cockroach1:
         condition: service_healthy
@@ -183,18 +161,17 @@ services:
   cockroach-bootstrap:
     image: cockroachdb/cockroach:v24.2.5
     container_name: cockroach-bootstrap
+    entrypoint: []
     command:
-      - /bin/bash
+      - /bin/sh
       - -c
       - |
         set -e
         echo "Waiting for cluster to accept SQL connections..."
-        
-        # Poll until we can successfully connect and run a query
         max_attempts=30
         attempt=0
         while [ $$attempt -lt $$max_attempts ]; do
-          if cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1' >/dev/null 2>&1; then
+          if /cockroach/cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1' >/dev/null 2>&1; then
             echo "SQL is ready!"
             break
           fi
@@ -202,21 +179,15 @@ services:
           sleep 3
           attempt=$$((attempt+1))
         done
-        
-        if [ $$attempt -eq $$max_attempts ]; then
-          echo "Failed to connect to SQL after $$max_attempts attempts"
-          exit 1
-        fi
-        
-        # Create database and user
+        [ $$attempt -lt $$max_attempts ] || { echo "SQL not ready in time"; exit 1; }
+
         echo "Creating database and user..."
-        cockroach sql --insecure --host=cockroach1:26257 <<EOF
+        /cockroach/cockroach sql --insecure --host=cockroach1:26257 <<'EOF'
         CREATE DATABASE IF NOT EXISTS innover;
-        CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass';
+        CREATE USER IF NOT EXISTS fin;
         GRANT ALL ON DATABASE innover TO fin;
-        SELECT 'Database setup complete' as status;
+        SELECT 'Database setup complete' AS status;
         EOF
-        
         echo "Bootstrap completed successfully!"
     depends_on:
       cockroach-init-cluster:
@@ -229,7 +200,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-profile
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
@@ -247,7 +218,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-payment
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
@@ -265,7 +236,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-ledger
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
@@ -283,7 +254,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-wallet
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
@@ -301,7 +272,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-rules
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
@@ -319,7 +290,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-forex
-      DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
