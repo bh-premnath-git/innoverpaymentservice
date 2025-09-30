@@ -65,10 +65,14 @@ services:
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
-      - otel-collector
-      - cockroach-init
-      - redis
-      - redpanda
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   payment:
     build: ./services/payment
@@ -78,7 +82,15 @@ services:
       DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
-    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   ledger:
     build: ./services/ledger
@@ -88,7 +100,15 @@ services:
       DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
-    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   wallet:
     build: ./services/wallet
@@ -98,7 +118,15 @@ services:
       DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
-    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   rule-engine:
     build: ./services/rule-engine
@@ -108,7 +136,15 @@ services:
       DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
-    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   forex:
     build: ./services/forex
@@ -118,7 +154,15 @@ services:
       DB_URL: postgresql+psycopg2://fin:finpass@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
-    depends_on: [otel-collector, cockroach-init, redis, redpanda]
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
 
   
   cockroach1:
