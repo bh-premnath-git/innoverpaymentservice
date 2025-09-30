@@ -3,6 +3,13 @@ x-svc-env: &svc_env
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
+x-cockroach-healthcheck: &cockroach_healthcheck
+  test: ["CMD-SHELL", "cockroach sql --insecure --host=localhost:26257 -e 'SELECT 1'"]
+  interval: 5s
+  timeout: 5s
+  retries: 12
+  start_period: 5s
+
 services:
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -122,6 +129,7 @@ services:
       - "8082:8080"     # Admin UI (node1)
     volumes:
       - cockroach1:/cockroach/cockroach-data
+    healthcheck: *cockroach_healthcheck
 
   cockroach2:
     image: cockroachdb/cockroach:v24.2.5
@@ -129,6 +137,7 @@ services:
     volumes:
       - cockroach2:/cockroach/cockroach-data
     depends_on: [cockroach1]
+    healthcheck: *cockroach_healthcheck
 
   cockroach3:
     image: cockroachdb/cockroach:v24.2.5
@@ -136,16 +145,27 @@ services:
     volumes:
       - cockroach3:/cockroach/cockroach-data
     depends_on: [cockroach1, cockroach2]
+    healthcheck: *cockroach_healthcheck
 
   # One-time init job to create app database(s) and users (optional)
   cockroach-init:
     image: cockroachdb/cockroach:v24.2.5
     command:
-      - sql
-      - --insecure
-      - --host=cockroach1:26257
-      - --execute=CREATE DATABASE IF NOT EXISTS innover; CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass'; GRANT ALL ON DATABASE innover TO fin;
-    depends_on: [cockroach1, cockroach2, cockroach3]
+      - /bin/sh
+      - -c
+      - |
+          until cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1'; do
+            echo "Waiting for CockroachDB cluster to be ready..."
+            sleep 2
+          done
+          cockroach sql --insecure --host=cockroach1:26257 --execute="CREATE DATABASE IF NOT EXISTS innover; CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass'; GRANT ALL ON DATABASE innover TO fin;"
+    depends_on:
+      cockroach1:
+        condition: service_healthy
+      cockroach2:
+        condition: service_healthy
+      cockroach3:
+        condition: service_healthy
     restart: "no"
 
   # Redis (cache / Celery)
