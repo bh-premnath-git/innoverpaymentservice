@@ -4,7 +4,7 @@ x-svc-env: &svc_env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD-SHELL", "cockroach sql --insecure --host=localhost:26257 -e 'SELECT 1'"]
+  test: ["CMD-SHELL", "cockroach sql --insecure --host=$$(hostname -f):26257 -e 'SELECT 1'"]
   interval: 5s
   timeout: 5s
   retries: 12
