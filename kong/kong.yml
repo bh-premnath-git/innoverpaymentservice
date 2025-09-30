@@ -1,4 +1,6 @@
 _format_version: "3.0"
+plugins:
+  - name: openid-connect
 services:
   - name: ledger-svc
     url: http://ledger:8000
