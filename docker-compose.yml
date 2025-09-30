@@ -167,7 +167,7 @@ services:
   
   cockroach1:
     image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach1:26257 --http-addr=cockroach1:8080 --join=cockroach1,cockroach2,cockroach3
+    command: start --insecure --listen-addr=cockroach1:26257 --http-addr=cockroach1:8080 --sql-addr=cockroach1:26257 --advertise-addr=cockroach1:26257 --join=cockroach1,cockroach2,cockroach3
     ports:
       - "26257:26257"   # SQL
       - "8082:8080"     # Admin UI (node1)
@@ -177,7 +177,7 @@ services:
 
   cockroach2:
     image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach2:26257 --http-addr=cockroach2:8080 --join=cockroach1,cockroach2,cockroach3
+    command: start --insecure --listen-addr=cockroach2:26257 --http-addr=cockroach2:8080 --sql-addr=cockroach2:26257 --advertise-addr=cockroach2:26257 --join=cockroach1,cockroach2,cockroach3
     volumes:
       - cockroach2:/cockroach/cockroach-data
     depends_on: [cockroach1]
@@ -185,7 +185,7 @@ services:
 
   cockroach3:
     image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach3:26257 --http-addr=cockroach3:8080 --join=cockroach1,cockroach2,cockroach3
+    command: start --insecure --listen-addr=cockroach3:26257 --http-addr=cockroach3:8080 --sql-addr=cockroach3:26257 --advertise-addr=cockroach3:26257 --join=cockroach1,cockroach2,cockroach3
     volumes:
       - cockroach3:/cockroach/cockroach-data
     depends_on: [cockroach1, cockroach2]
