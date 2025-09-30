@@ -140,13 +140,11 @@ services:
   # One-time init job to create app database(s) and users (optional)
   cockroach-init:
     image: cockroachdb/cockroach:v24.2.5
-    command: >
-      sh -c "
-      /cockroach/cockroach sql --insecure --host=cockroach1:26257 -e
-      \"CREATE DATABASE IF NOT EXISTS innover;
-         CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass';
-         GRANT ALL ON DATABASE innover TO fin;\"
-      "
+    command:
+      - sql
+      - --insecure
+      - --host=cockroach1:26257
+      - --execute=CREATE DATABASE IF NOT EXISTS innover; CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass'; GRANT ALL ON DATABASE innover TO fin;
     depends_on: [cockroach1, cockroach2, cockroach3]
     restart: "no"
 
