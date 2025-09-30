@@ -4,7 +4,7 @@ x-svc-env: &svc_env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD", "curl", "-fsS", "http://localhost:8080/health?ready=1"]
+  test: ["CMD-SHELL", "curl -fsS http://$(hostname -f):8080/health?ready=1"]
   interval: 10s
   timeout: 5s
   retries: 5
