@@ -4,11 +4,11 @@ x-svc-env: &svc_env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD-SHELL", "cockroach sql --insecure --host=$$(hostname -f):26257 -e 'SELECT 1'"]
-  interval: 5s
+  test: ["CMD", "curl", "-fsS", "http://localhost:8080/health?ready=1"]
+  interval: 10s
   timeout: 5s
-  retries: 12
-  start_period: 5s
+  retries: 5
+  start_period: 30s
 
 services:
   jaeger:
@@ -55,7 +55,175 @@ services:
     depends_on:
       - keycloak
 
-  # -------- Services --------
+  # -------- CockroachDB Cluster --------
+  cockroach1:
+    image: cockroachdb/cockroach:v24.2.5
+    hostname: cockroach1
+    container_name: cockroach1
+    command:
+      - start
+      - --insecure
+      - --listen-addr=cockroach1:26357
+      - --advertise-addr=cockroach1:26357
+      - --sql-addr=cockroach1:26257
+      - --http-addr=cockroach1:8080
+      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
+      - --cache=.25
+      - --max-sql-memory=.25
+    ports:
+      - "26257:26257"   # SQL
+      - "8082:8080"     # Admin UI
+    volumes:
+      - cockroach1:/cockroach/cockroach-data
+    healthcheck: *cockroach_healthcheck
+    restart: unless-stopped
+
+  cockroach2:
+    image: cockroachdb/cockroach:v24.2.5
+    hostname: cockroach2
+    container_name: cockroach2
+    command:
+      - start
+      - --insecure
+      - --listen-addr=cockroach2:26357
+      - --advertise-addr=cockroach2:26357
+      - --sql-addr=cockroach2:26257
+      - --http-addr=cockroach2:8080
+      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
+      - --cache=.25
+      - --max-sql-memory=.25
+    volumes:
+      - cockroach2:/cockroach/cockroach-data
+    depends_on:
+      cockroach1:
+        condition: service_started
+    healthcheck: *cockroach_healthcheck
+    restart: unless-stopped
+
+  cockroach3:
+    image: cockroachdb/cockroach:v24.2.5
+    hostname: cockroach3
+    container_name: cockroach3
+    command:
+      - start
+      - --insecure
+      - --listen-addr=cockroach3:26357
+      - --advertise-addr=cockroach3:26357
+      - --sql-addr=cockroach3:26257
+      - --http-addr=cockroach3:8080
+      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
+      - --cache=.25
+      - --max-sql-memory=.25
+    volumes:
+      - cockroach3:/cockroach/cockroach-data
+    depends_on:
+      cockroach2:
+        condition: service_started
+    healthcheck: *cockroach_healthcheck
+    restart: unless-stopped
+
+  cockroach-init-cluster:
+    image: cockroachdb/cockroach:v24.2.5
+    container_name: cockroach-init-cluster
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "Waiting for all nodes to be healthy..."
+        
+        # Wait for all three nodes to be reachable via their inter-node ports
+        for node in cockroach1 cockroach2 cockroach3; do
+          echo "Checking $${node}:26357..."
+          until nc -z $${node} 26357; do
+            echo "Waiting for $${node} inter-node port..."
+            sleep 2
+          done
+          echo "$${node} is reachable on port 26357"
+        done
+        
+        # Wait for HTTP health endpoints
+        for node in cockroach1 cockroach2 cockroach3; do
+          echo "Checking $${node} health endpoint..."
+          until curl -fsS http://$${node}:8080/health?ready=1 >/dev/null 2>&1; do
+            echo "Waiting for $${node} to be healthy..."
+            sleep 2
+          done
+          echo "$${node} is healthy"
+        done
+        
+        # Additional wait for gossip network formation
+        echo "Waiting 30 seconds for gossip network to stabilize..."
+        sleep 30
+        
+        # Initialize the cluster
+        echo "Initializing CockroachDB cluster..."
+        if cockroach init --insecure --host=cockroach1:26357; then
+          echo "Cluster initialized successfully!"
+        else
+          exit_code=$$?
+          if [ $$exit_code -eq 1 ]; then
+            echo "Cluster already initialized (this is OK)"
+            exit 0
+          else
+            echo "Failed to initialize cluster with exit code $$exit_code"
+            exit $$exit_code
+          fi
+        fi
+    depends_on:
+      cockroach1:
+        condition: service_healthy
+      cockroach2:
+        condition: service_healthy
+      cockroach3:
+        condition: service_healthy
+    restart: "no"
+
+  # Database and user creation
+  cockroach-bootstrap:
+    image: cockroachdb/cockroach:v24.2.5
+    container_name: cockroach-bootstrap
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        echo "Waiting for cluster to accept SQL connections..."
+        
+        # Poll until we can successfully connect and run a query
+        max_attempts=30
+        attempt=0
+        while [ $$attempt -lt $$max_attempts ]; do
+          if cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1' >/dev/null 2>&1; then
+            echo "SQL is ready!"
+            break
+          fi
+          echo "Attempt $$((attempt+1))/$$max_attempts: SQL not ready, waiting..."
+          sleep 3
+          attempt=$$((attempt+1))
+        done
+        
+        if [ $$attempt -eq $$max_attempts ]; then
+          echo "Failed to connect to SQL after $$max_attempts attempts"
+          exit 1
+        fi
+        
+        # Create database and user
+        echo "Creating database and user..."
+        cockroach sql --insecure --host=cockroach1:26257 <<EOF
+        CREATE DATABASE IF NOT EXISTS innover;
+        CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass';
+        GRANT ALL ON DATABASE innover TO fin;
+        SELECT 'Database setup complete' as status;
+        EOF
+        
+        echo "Bootstrap completed successfully!"
+    depends_on:
+      cockroach-init-cluster:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # -------- Application Services --------
   profile:
     build: ./services/profile
     environment:
@@ -67,7 +235,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
@@ -85,7 +253,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
@@ -103,7 +271,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
@@ -121,7 +289,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
@@ -139,7 +307,7 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
@@ -157,85 +325,18 @@ services:
     depends_on:
       otel-collector:
         condition: service_started
-      cockroach-init:
+      cockroach-bootstrap:
         condition: service_completed_successfully
       redis:
         condition: service_started
       redpanda:
         condition: service_started
 
-  
-  cockroach1:
-    image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach1:26257 --http-addr=cockroach1:8080 --sql-addr=cockroach1:26257 --advertise-addr=cockroach1:26257 --join=cockroach1,cockroach2,cockroach3
-    ports:
-      - "26257:26257"   # SQL
-      - "8082:8080"     # Admin UI (node1)
-    volumes:
-      - cockroach1:/cockroach/cockroach-data
-    healthcheck: *cockroach_healthcheck
-
-  cockroach2:
-    image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach2:26257 --http-addr=cockroach2:8080 --sql-addr=cockroach2:26257 --advertise-addr=cockroach2:26257 --join=cockroach1,cockroach2,cockroach3
-    volumes:
-      - cockroach2:/cockroach/cockroach-data
-    depends_on: [cockroach1]
-    healthcheck: *cockroach_healthcheck
-
-  cockroach3:
-    image: cockroachdb/cockroach:v24.2.5
-    command: start --insecure --listen-addr=cockroach3:26257 --http-addr=cockroach3:8080 --sql-addr=cockroach3:26257 --advertise-addr=cockroach3:26257 --join=cockroach1,cockroach2,cockroach3
-    volumes:
-      - cockroach3:/cockroach/cockroach-data
-    depends_on: [cockroach1, cockroach2]
-    healthcheck: *cockroach_healthcheck
-
-  cockroach-init-cluster:
-    image: cockroachdb/cockroach:v24.2.5
-    command:
-      - /bin/sh
-      - -c
-      - |
-          until curl -sf http://cockroach1:8080/health?ready=1; do
-            echo "Waiting for CockroachDB node to be ready..."
-            sleep 2
-          done
-          cockroach init --insecure --host=cockroach1:26257
-    depends_on:
-      cockroach1:
-        condition: service_healthy
-    restart: "no"
-
-  # One-time init job to create app database(s) and users (optional)
-  cockroach-init:
-    image: cockroachdb/cockroach:v24.2.5
-    command:
-      - /bin/sh
-      - -c
-      - |
-          until cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1'; do
-            echo "Waiting for CockroachDB cluster to be ready..."
-            sleep 2
-          done
-          cockroach sql --insecure --host=cockroach1:26257 --execute="CREATE DATABASE IF NOT EXISTS innover; CREATE USER IF NOT EXISTS fin WITH PASSWORD 'finpass'; GRANT ALL ON DATABASE innover TO fin;"
-    depends_on:
-      cockroach1:
-        condition: service_healthy
-      cockroach2:
-        condition: service_healthy
-      cockroach3:
-        condition: service_healthy
-      cockroach-init-cluster:
-        condition: service_completed_successfully
-    restart: "no"
-
-  # Redis (cache / Celery)
+  # -------- Infrastructure Services --------
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
 
-  # Redpanda (Kafka-compatible)
   redpanda:
     image: redpandadata/redpanda:v24.2.13
     command:
@@ -259,7 +360,7 @@ services:
       - --advertise-rpc-addr
       - "redpanda:33145"
     ports:
-      - "9092:9092"   # Kafka
+      - "9092:9092"
     volumes:
       - redpanda:/var/lib/redpanda/data
 
