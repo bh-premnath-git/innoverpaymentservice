@@ -3,6 +3,11 @@ FROM kong:latest
 USER root
 
 RUN set -eux; \
+    apt-get update; \
+    apt-get install -y curl; \
+    rm -rf /var/lib/apt/lists/*
+
+RUN set -eux; \
     luarocks install lua-resty-openidc 1.7.5-1; \
     luarocks install lua-resty-session 3.11-1
 
