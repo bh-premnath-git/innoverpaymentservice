@@ -147,6 +147,22 @@ services:
     depends_on: [cockroach1, cockroach2]
     healthcheck: *cockroach_healthcheck
 
+  cockroach-init-cluster:
+    image: cockroachdb/cockroach:v24.2.5
+    command:
+      - /bin/sh
+      - -c
+      - |
+          until curl -sf http://cockroach1:8080/health?ready=1; do
+            echo "Waiting for CockroachDB node to be ready..."
+            sleep 2
+          done
+          cockroach init --insecure --host=cockroach1:26257
+    depends_on:
+      cockroach1:
+        condition: service_healthy
+    restart: "no"
+
   # One-time init job to create app database(s) and users (optional)
   cockroach-init:
     image: cockroachdb/cockroach:v24.2.5
@@ -166,6 +182,8 @@ services:
         condition: service_healthy
       cockroach3:
         condition: service_healthy
+      cockroach-init-cluster:
+        condition: service_completed_successfully
     restart: "no"
 
   # Redis (cache / Celery)
