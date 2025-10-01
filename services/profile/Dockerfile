@@ -13,6 +13,7 @@ WORKDIR /app
 
 # Optional: requirements (skip if you don't have any)
 COPY app/requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip setuptools wheel
 RUN if [ -s /app/requirements.txt ]; then pip install -r /app/requirements.txt; fi
 
 # Copy code
