@@ -4,6 +4,7 @@ This repository is a fully containerized playground for an event-driven payments
 
 ## Table of contents
 1. [Service catalog](#service-catalog)
+   - [Asynchronous jobs](#asynchronous-jobs)
 2. [Supporting infrastructure](#supporting-infrastructure)
 3. [Identity and API gateway](#identity-and-api-gateway)
 4. [Observability](#observability)
@@ -12,18 +13,37 @@ This repository is a fully containerized playground for an event-driven payments
 7. [Repository layout](#repository-layout)
 
 ## Service catalog
-Each business domain lives in `services/<name>` and currently ships a Dockerized heartbeat worker. The pattern is identical across all six services:
+Each business domain lives in `services/<name>` and ships with both an HTTP placeholder (the `app/main.py` heartbeat) **and** a Celery worker that exercises the async infrastructure. The pattern is identical across all six domains:
 
-| Service | Purpose placeholder | Entrypoint | Container image | Default env wiring |
-|---------|---------------------|------------|-----------------|--------------------|
-| `profile` | User profile orchestration | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-profile`, database, Redis, Kafka, OTEL, OIDC |
-| `payment` | Payment initiation pipeline | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-payment`, database, Redis, Kafka, OTEL, OIDC |
-| `ledger` | Financial ledger posting | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-ledger`, database, Redis, Kafka, OTEL, OIDC |
-| `wallet` | Customer wallet balance | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-wallet`, database, Redis, Kafka, OTEL, OIDC |
-| `rule-engine` | Decisioning / risk controls | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-rules`, database, Redis, Kafka, OTEL, OIDC |
-| `forex` | FX quote ingestion | `app/main.py` | `python:3.14.0rc3-slim-trixie` | `SERVICE_NAME=svc-forex`, database, Redis, Kafka, OTEL, OIDC |
+| Service | Example scope | Runtime containers | Entrypoint(s) | Default env wiring |
+|---------|---------------|-------------------|---------------|--------------------|
+| `profile` | User profile orchestration | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
+| `payment` | Payment initiation pipeline | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
+| `ledger` | Financial ledger posting | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
+| `wallet` | Customer wallet balance | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
+| `rule-engine` | Decisioning / risk controls | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
+| `forex` | FX quote ingestion | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
 
-The `app/main.py` process prints a startup banner that includes the injected `SERVICE_NAME`, then emits a tick every five seconds so the container stays healthy while you build real functionality. All services share the same Dockerfile template that installs optional requirements, copies the app directory, adds a health check, and runs the heartbeat script with unbuffered logging. The `docker-compose.yml` file fans each container out with identical environment variables for CockroachDB, Redis, Redpanda, OpenTelemetry, and Keycloak integration.
+The `app/main.py` process still prints a startup banner that includes the injected `SERVICE_NAME`, then emits a tick every five seconds so the container stays healthy while you build real functionality. Each service also exposes a `celery_app.py`/`tasks.py` module pair so you can fire real jobs through Redis. All services share the same Dockerfile template that installs optional requirements, copies the app directory, adds a health check, and runs either the heartbeat script or the Celery worker with unbuffered logging. The `docker-compose.yml` file fans each container out with identical environment variables for CockroachDB, Redis, Redpanda, OpenTelemetry, and Keycloak integration.
+
+### Asynchronous jobs
+
+Every domain has a minimal Celery setup that demonstrates late acknowledgements, per-task routing, and idempotent worker configuration. To experiment locally:
+
+1. Start the stack (`make up`).
+2. Exec into a worker container, e.g. `docker compose exec profile-worker bash`.
+3. Open a Python shell and queue sample jobs:
+
+   ```python
+   from tasks import add, slow
+
+   add.delay(1, 2)   # -> 3
+   slow.delay(5)     # sleeps 5 seconds, then returns 5
+   ```
+
+4. Watch execution from the worker logs (`docker compose logs -f profile-worker`).
+
+Because the broker/backend are both Redis, results can be inspected with `redis-cli` or by awaiting the `AsyncResult`. Swap the URLs in `services/<name>/app/celery_app.py` if you want to point at production-grade infrastructure.
 
 ## Supporting infrastructure
 The compose stack bootstraps every dependency you need to exercise the services locally:
@@ -146,7 +166,7 @@ innover/
 ├─ docker-compose.yml
 ├─ Makefile
 innoverpaymentservice/
-├─ services/            # Six placeholder Python microservices with identical Dockerfiles and heartbeat loops
+├─ services/            # Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding
 ├─ protos/              # Versioned gRPC API definitions per domain
 ├─ keycloak/            # Realm export consumed during Keycloak startup
 ├─ kong/                # Declarative Kong configuration with OIDC plugins
