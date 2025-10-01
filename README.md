@@ -69,9 +69,35 @@ still honour the cgroup constraints when the stack is running locally.
 ## Identity and API gateway
 The identity layer is prewired so that local OAuth/OIDC flows work out of the box:
 
-- `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `kong` client with `kong-secret` so Kong can exchange authorization codes and enrich upstream requests with user claims.
-- The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments.
-- `kong/kong.yml` creates declarative services and routes (`/api/ledger`, `/api/wallet`, `/api/rules`, `/api/fx`) with the OpenID Connect plugin set to inject `sub` and `preferred_username` headers into each upstream request once tokens are validated.
+- `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `kong` client. Keep the `secret` field for that client in lock-step with the `KONG_OIDC_CLIENT_SECRET` value in `.env`, otherwise Kong will be unable to complete the authorization-code exchange.
+- The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments. The shipped export restricts redirect and post-logout URIs to `http://localhost:8000/*`, so add extra origins in the realm if you proxy Kong somewhere else.
+- `kong/kong.yml` creates declarative services and routes (`/api/ledger`, `/api/wallet`, `/api/rules`, `/api/fx`) with the OpenID Connect plugin set to inject `sub` and `preferred_username` headers into each upstream request once tokens are validated. The claims arrive as `x-sub` and `x-username` headers on the upstream request.
+
+### Keycloak + Kong checklist
+1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8081`) and Kong (`http://localhost:8000`) to report healthy.
+2. Sign in to the Keycloak admin console (`http://localhost:8081/admin`) with the bootstrap credentials declared in `docker-compose.yml`, then create a user with a password and mark it as verified/enabled.
+3. In a second tab, request a service through Kong, e.g. `http://localhost:8000/api/ledger`.
+4. When Kong redirects you to Keycloak, complete the login with the user from step 2. Keycloak returns you to the original `/api/<service>` URL after the authorization code exchange finishes.
+5. Repeat your Kong request (browser refresh or `curl --cookie`) and observe the post-login response. The placeholder services in this repo only emit heartbeat logs, but any real upstream will now receive `x-sub` and `x-username` headers populated with the authenticated subject and username.
+
+### Example Kong↔Keycloak flow
+The snippet below shows the round-trip you should expect when exercising the `/api/ledger` route. The first call demonstrates the redirect, the second shows what hits the upstream once the browser session is authenticated:
+
+```bash
+# 1. Kong forces you through Keycloak when no session is present
+curl -i "http://localhost:8000/api/ledger"
+# HTTP/1.1 302 Found
+# location: http://localhost:8081/realms/innover/protocol/openid-connect/auth?client_id=kong&...
+
+# 2. After completing the browser login, reuse the Keycloak session cookie
+curl -i --cookie cookies.txt "http://localhost:8000/api/ledger"
+# HTTP/1.1 200 OK (or the upstream response your service returns)
+# ... forwarded to ledger with headers:
+#   x-sub: <Keycloak user id>
+#   x-username: <preferred_username claim>
+```
+
+To capture the forwarded headers verbatim while you are experimenting, point one of the routes at an HTTP echo service or add temporary logging to your upstream application and watch for the `x-sub` and `x-username` headers after authenticating.
 
 To customize identity:
 1. Update the realm export file with additional clients, scopes, or roles.
