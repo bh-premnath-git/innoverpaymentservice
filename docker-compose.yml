@@ -73,7 +73,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-      - jaeger
     deploy: *support_deploy
     restart: unless-stopped
 
@@ -125,7 +124,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-      - keycloak
     deploy: *support_deploy
     restart: unless-stopped
 
