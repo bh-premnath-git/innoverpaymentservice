@@ -2,7 +2,7 @@ x-svc-env: &svc_env
   OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
-
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secret}
 x-default-deploy: &default_deploy
   resources:
     limits:
@@ -278,7 +278,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-profile
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -312,7 +312,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-profile-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -332,7 +332,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-payment
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -366,7 +366,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-payment-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -386,7 +386,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-ledger
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -420,7 +420,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-ledger-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -440,7 +440,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-wallet
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -474,7 +474,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-wallet-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -494,7 +494,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-rules
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -528,7 +528,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-rules-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -548,7 +548,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-forex
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -582,7 +582,7 @@ services:
       <<: *svc_env
       SERVICE_NAME: svc-forex-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     depends_on:
       otel-collector:
@@ -599,6 +599,9 @@ services:
   # -------- Infrastructure Services --------
   redis:
     image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secret}
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-redis-secret}"]
     ports: ["6379:6379"]
     healthcheck:
       test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -q PONG"]

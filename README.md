@@ -53,7 +53,7 @@ The compose stack bootstraps every dependency you need to exercise the services 
 - **Keycloak** starts with the `innover` realm imported from `keycloak/realm-export.json`, listening on `http://localhost:8081` for administrative access.
 - **Kong Gateway** is configured declaratively from `kong/kong.yml`, enabling the OpenID Connect plugin to guard each route while proxying requests to the internal services.
 - **CockroachDB** comes up as a three-node cluster with sequential health-checked startup, followed by automated cluster initialization and database/user bootstrapping jobs so schemas are ready before your services connect. Ports `26257` (SQL) and `8082` (admin UI) are forwarded from the first node.
-- **Redis 7** provides a lightweight cache/message store on `localhost:6379`.
+- **Redis 7** provides a lightweight cache/message store on `localhost:6379` secured with the password supplied via `REDIS_PASSWORD`.
 - **Redpanda** serves as the Kafka-compatible event broker with a single-node developer configuration bound to `localhost:9092` and persisted in a named volume.
 
 ## Resource limits and local tuning

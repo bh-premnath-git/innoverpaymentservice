@@ -1,7 +1,11 @@
 import os
 from celery import Celery
 
-broker = os.getenv("REDIS_URL", "redis://redis:6379/0")
+redis_password = os.getenv("REDIS_PASSWORD", "")
+default_broker = (
+    f"redis://:{redis_password}@redis:6379/0" if redis_password else "redis://redis:6379/0"
+)
+broker = os.getenv("REDIS_URL", default_broker)
 
 celery_app = Celery(
     __name__,
