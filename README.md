@@ -87,6 +87,9 @@ All Python services ship with OpenTelemetry environment variables that point at 
 - Docker Compose v2 (bundled with recent Docker Desktop installations)
 - Optional: Python 3.11+ and `grpcio-tools` if you plan to regenerate protobuf stubs outside the containers
 
+### Environment configuration
+-  `.env` and replace placeholder secrets before starting the stack. The compose file now requires a non-placeholder `KONG_OIDC_CLIENT_SECRET` so Kong can authenticate with Keycloak, and other values should be customized to match your local setup.
+
 ### Start the stack
 ```bash
 make up
