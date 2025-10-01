@@ -213,11 +213,75 @@ services:
       redpanda:
         condition: service_started
 
+  profile-worker:
+    build: ./services/profile
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "profile-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-profile-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
   payment:
     build: ./services/payment
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-payment
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
+  payment-worker:
+    build: ./services/payment
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "payment-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-payment-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
@@ -249,11 +313,75 @@ services:
       redpanda:
         condition: service_started
 
+  ledger-worker:
+    build: ./services/ledger
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "ledger-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-ledger-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
   wallet:
     build: ./services/wallet
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-wallet
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
+  wallet-worker:
+    build: ./services/wallet
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "wallet-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-wallet-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
@@ -285,11 +413,75 @@ services:
       redpanda:
         condition: service_started
 
+  rule-engine-worker:
+    build: ./services/rule-engine
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "rule-engine-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-rules-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
   forex:
     build: ./services/forex
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-forex
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    depends_on:
+      otel-collector:
+        condition: service_started
+      cockroach-bootstrap:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+      redpanda:
+        condition: service_started
+
+  forex-worker:
+    build: ./services/forex
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "forex-worker@%h"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-forex-worker
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
