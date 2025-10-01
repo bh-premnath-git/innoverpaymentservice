@@ -56,6 +56,16 @@ The compose stack bootstraps every dependency you need to exercise the services 
 - **Redis 7** provides a lightweight cache/message store on `localhost:6379`.
 - **Redpanda** serves as the Kafka-compatible event broker with a single-node developer configuration bound to `localhost:9092` and persisted in a named volume.
 
+## Resource limits and local tuning
+The default `docker-compose.yml` now applies conservative CPU and memory caps to each container using `deploy.resources.limits`.
+The anchors defined near the top of the file (`x-default-deploy`, `x-worker-deploy`, `x-support-deploy`, etc.) describe the
+limits that are shared by common container types (HTTP APIs, Celery workers, infrastructure services, and databases). Adjust
+these anchors to change the limits globally for each service category, or override an individual service by editing its
+`deploy` block directly. The values are intentionally modest so that the entire stack can run on a developer laptop; if you need
+more headroom for load testing, increase the `cpus` and `memory` values and restart the affected containers with
+`docker compose up -d <service>`. Remember that Docker Compose will ignore these settings outside of Swarm mode but Docker will
+still honour the cgroup constraints when the stack is running locally.
+
 ## Identity and API gateway
 The identity layer is prewired so that local OAuth/OIDC flows work out of the box:
 
