@@ -3,6 +3,36 @@ x-svc-env: &svc_env
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
 
+x-default-deploy: &default_deploy
+  resources:
+    limits:
+      cpus: "0.50"
+      memory: 512M
+
+x-worker-deploy: &worker_deploy
+  resources:
+    limits:
+      cpus: "0.75"
+      memory: 768M
+
+x-db-deploy: &db_deploy
+  resources:
+    limits:
+      cpus: "2.00"
+      memory: 2G
+
+x-support-deploy: &support_deploy
+  resources:
+    limits:
+      cpus: "1.00"
+      memory: 1G
+
+x-light-deploy: &light_deploy
+  resources:
+    limits:
+      cpus: "0.25"
+      memory: 256M
+
 x-cockroach-healthcheck: &cockroach_healthcheck
   test: ["CMD-SHELL", "curl -fsS http://$(hostname -f):8080/health || exit 0"]
   interval: 10s
@@ -22,6 +52,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.00"
+          memory: 1G
+    restart: unless-stopped
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -37,6 +73,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+      - jaeger
+    deploy: *support_deploy
+    restart: unless-stopped
 
   keycloak:
     image: quay.io/keycloak/keycloak:latest
@@ -54,6 +93,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1.5G
+    restart: unless-stopped
 
   kong:
     build: ./kong
@@ -80,6 +125,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+      - keycloak
+    deploy: *support_deploy
+    restart: unless-stopped
 
   # -------- CockroachDB Cluster --------
   cockroach1:
@@ -103,6 +151,7 @@ services:
       - cockroach1:/cockroach/cockroach-data
     healthcheck: *cockroach_healthcheck
     restart: unless-stopped
+    deploy: *db_deploy
 
   cockroach2:
     image: cockroachdb/cockroach:v24.2.5
@@ -125,6 +174,7 @@ services:
         condition: service_started
     healthcheck: *cockroach_healthcheck
     restart: unless-stopped
+    deploy: *db_deploy
 
   cockroach3:
     image: cockroachdb/cockroach:v24.2.5
@@ -147,6 +197,7 @@ services:
         condition: service_started
     healthcheck: *cockroach_healthcheck
     restart: unless-stopped
+    deploy: *db_deploy
 
   cockroach-init-cluster:
     image: cockroachdb/cockroach:v24.2.5
@@ -182,6 +233,7 @@ services:
       cockroach3:
         condition: service_healthy
     restart: "no"
+    deploy: *default_deploy
 
   # Database and user creation
   cockroach-bootstrap:
@@ -219,6 +271,7 @@ services:
       cockroach-init-cluster:
         condition: service_completed_successfully
     restart: "no"
+    deploy: *default_deploy
 
   # -------- Application Services --------
   profile:
@@ -238,6 +291,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   profile-worker:
     build: ./services/profile
@@ -270,6 +325,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   payment:
     build: ./services/payment
@@ -288,6 +345,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   payment-worker:
     build: ./services/payment
@@ -320,6 +379,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   ledger:
     build: ./services/ledger
@@ -338,6 +399,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   ledger-worker:
     build: ./services/ledger
@@ -370,6 +433,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   wallet:
     build: ./services/wallet
@@ -388,6 +453,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   wallet-worker:
     build: ./services/wallet
@@ -420,6 +487,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   rule-engine:
     build: ./services/rule-engine
@@ -438,6 +507,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   rule-engine-worker:
     build: ./services/rule-engine
@@ -470,6 +541,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   forex:
     build: ./services/forex
@@ -488,6 +561,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
 
   forex-worker:
     build: ./services/forex
@@ -520,6 +595,8 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
 
   # -------- Infrastructure Services --------
   redis:
@@ -531,6 +608,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    deploy: *light_deploy
+    restart: unless-stopped
 
   redpanda:
     image: redpandadata/redpanda:v24.2.13
@@ -564,6 +643,12 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1.5G
+    restart: unless-stopped
 
 volumes:
   cockroach1:
