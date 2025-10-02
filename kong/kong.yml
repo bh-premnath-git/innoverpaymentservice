@@ -42,12 +42,12 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
-              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
+              issuer: http://nginx/auth/realms/innover
+              discovery: http://nginx/auth/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
-              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint: http://nginx/auth/realms/innover/protocol/openid-connect/token/introspect
               introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
@@ -64,12 +64,12 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
-              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
+              issuer: http://nginx/auth/realms/innover
+              discovery: http://nginx/auth/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
-              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint: http://nginx/auth/realms/innover/protocol/openid-connect/token/introspect
               introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
@@ -86,12 +86,12 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
-              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
+              issuer: http://nginx/auth/realms/innover
+              discovery: http://nginx/auth/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
-              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint: http://nginx/auth/realms/innover/protocol/openid-connect/token/introspect
               introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
@@ -108,12 +108,12 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
-              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
+              issuer: http://nginx/auth/realms/innover
+              discovery: http://nginx/auth/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
-              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint: http://nginx/auth/realms/innover/protocol/openid-connect/token/introspect
               introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
@@ -130,12 +130,12 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
-              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
+              issuer: http://nginx/auth/realms/innover
+              discovery: http://nginx/auth/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
-              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint: http://nginx/auth/realms/innover/protocol/openid-connect/token/introspect
               introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
