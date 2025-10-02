@@ -525,6 +525,12 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
     deploy: *default_deploy
     restart: unless-stopped
 
@@ -561,6 +567,12 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     deploy: *worker_deploy
     restart: unless-stopped
 

@@ -25,9 +25,8 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
 
 USER appuser
 
-# Minimal healthcheck (optional)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')" || exit 1
+# No healthcheck for workers - they don't expose HTTP
+# For FastAPI mode, healthcheck can be added in docker-compose override
 
 EXPOSE 8000
 
