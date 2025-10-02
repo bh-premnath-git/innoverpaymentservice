@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 # Environment variables with fallbacks
-KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://keycloak:8080")
+KEYCLOAK_URL = os.getenv("KEYCLOAK_URL", "http://nginx/auth")
 KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "innover")
 OIDC_ISSUER = os.getenv("OIDC_ISSUER", f"{KEYCLOAK_URL}/realms/{KEYCLOAK_REALM}")
 

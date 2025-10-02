@@ -50,7 +50,7 @@ The compose stack bootstraps every dependency you need to exercise the services 
 
 - **Jaeger all-in-one** exposes `http://localhost:16686` for trace inspection and also accepts OTLP traffic on port 4317.
 - **OpenTelemetry Collector** runs the `otel/collector.yaml` pipeline, receiving OTLP traces from the services and forwarding them to Jaeger and a debug exporter for console verification.
-- **Keycloak** starts with the `innover` realm imported from `keycloak/realm-export.json`, listening on `http://localhost:8081` for administrative access.
+- **Keycloak** starts with the `innover` realm imported from `keycloak/realm-export.json`, listening on `http://localhost:8080` for administrative access and proxied through Nginx at `http://localhost/auth` for OIDC flows.
 - **Kong Gateway** is configured declaratively from `kong/kong.yml`, enabling the OpenID Connect plugin to guard each route while proxying requests to the internal services.
 - **CockroachDB** comes up as a three-node cluster with sequential health-checked startup, followed by automated cluster initialization and database/user bootstrapping jobs so schemas are ready before your services connect. Ports `26257` (SQL) and `8082` (admin UI) are forwarded from the first node.
 - **Redis 7** provides a lightweight cache/message store on `localhost:6379` secured with the password supplied via `REDIS_PASSWORD`.
@@ -74,8 +74,8 @@ The identity layer is prewired so that local OAuth/OIDC flows work out of the bo
 - `kong/kong.yml` creates declarative services and routes (`/api/ledger`, `/api/wallet`, `/api/rules`, `/api/fx`) with the OpenID Connect plugin set to inject `sub` and `preferred_username` headers into each upstream request once tokens are validated. The claims arrive as `x-sub` and `x-username` headers on the upstream request.
 
 ### Keycloak + Kong checklist
-1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8081`) and Kong (`http://localhost:8000`) to report healthy.
-2. Sign in to the Keycloak admin console (`http://localhost:8081/admin`) with the bootstrap credentials declared in `docker-compose.yml`, then create a user with a password and mark it as verified/enabled.
+1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8080`) and Kong (`http://localhost:8000`) to report healthy.
+2. Sign in to the Keycloak admin console (`http://localhost:8080/admin`) with the bootstrap credentials declared in `docker-compose.yml`, then create a user with a password and mark it as verified/enabled.
 3. In a second tab, request a service through Kong, e.g. `http://localhost:8000/api/ledger`.
 4. When Kong redirects you to Keycloak, complete the login with the user from step 2. Keycloak returns you to the original `/api/<service>` URL after the authorization code exchange finishes.
 5. Repeat your Kong request (browser refresh or `curl --cookie`) and observe the post-login response. The placeholder services in this repo only emit heartbeat logs, but any real upstream will now receive `x-sub` and `x-username` headers populated with the authenticated subject and username.
@@ -87,7 +87,7 @@ The snippet below shows the round-trip you should expect when exercising the `/a
 # 1. Kong forces you through Keycloak when no session is present
 curl -i "http://localhost:8000/api/ledger"
 # HTTP/1.1 302 Found
-# location: http://localhost:8081/realms/innover/protocol/openid-connect/auth?client_id=kong&...
+# location: http://localhost/auth/realms/innover/protocol/openid-connect/auth?client_id=kong&...
 
 # 2. After completing the browser login, reuse the Keycloak session cookie
 curl -i --cookie cookies.txt "http://localhost:8000/api/ledger"
