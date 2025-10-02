@@ -10,10 +10,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
@@ -35,10 +38,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
@@ -54,10 +60,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
@@ -73,10 +82,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
@@ -92,10 +104,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
@@ -111,10 +126,13 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://localhost:8081/realms/innover
+              issuer: http://keycloak:8080/realms/innover
               discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              bearer_only: true
+              introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
+              introspection_endpoint_auth_method: client_secret_post
               scopes:
                 - openid
                 - profile
