@@ -131,12 +131,14 @@ make up
 If you need direct access to a service container, use `docker compose exec <service> bash` and note that each heartbeat script runs in the foreground printing `[tick n] alive` messages.
 
 ## Protobuf toolchain
-Domain APIs live under `protos/<domain>/v1`. The provided `generate_protos.sh` script iterates through each domain, compiles `.proto` definitions with `grpc_tools.protoc`, and drops Python stubs into the corresponding `services/<name>/app/generated` directory (creating it if necessary). Invoke it via the Make target:
+Domain APIs live under `protos/<domain>/v1`. The provided `generate_protos.sh` script iterates through each domain, compiles `.proto` definitions with `grpc_tools.protoc`, and drops Python stubs into the corresponding `services/<name>/app/generated` directory (creating it if necessary). Because the script shells out to `python -m grpc_tools.protoc`, developers must install `grpcio-tools` **before** invoking the Make target—for example:
 
 ```bash
+pip install grpcio-tools
 make proto
 ```
-The target quietly installs `grpcio-tools` if it is missing before running the script. Empty `.proto` placeholders are already present so you only need to populate them before regenerating stubs.
+
+Empty `.proto` placeholders are already present so you only need to populate them before regenerating stubs.
 
 ## Repository layout
 ```
