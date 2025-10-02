@@ -123,10 +123,23 @@ make up
 `make up` performs a `docker compose up -d --build`, ensuring images are rebuilt before the services launch. Wait for the CockroachDB bootstrap jobs to finish (`docker compose logs -f cockroach-bootstrap`) before hitting APIs through Kong at `http://localhost:8000`.
 
 ### Useful commands
+- `make up` – Start all containers with a fresh build (`docker compose up -d --build`).
+- `make ps` – Show container status as reported by Docker Compose.
+- `make health` – Print a table of container health checks for quick diagnostics.
 - `make logs` – Follow all container logs with a 200-line tail, useful when developing service logic.
+- `make logs-<svc>` – Tail logs for a specific service, mirroring `docker compose logs -f --tail=100 <svc>`.
 - `make rebuild` – Force a clean rebuild of every image without starting containers, ideal when base images or dependencies change.
+- `make restart-<svc>` – Restart a single service when you need to reload configuration quickly.
 - `make down` – Tear down the environment and remove volumes so CockroachDB and Redpanda state resets between experiments.
-- `make keycloak-url` – Echo quick links to Keycloak, Kong, and Jaeger dashboards for convenience.
+- `make nuke` – Remove containers, volumes, and images for a completely clean slate.
+- `make urls` – Echo quick links to Keycloak, Kong, Jaeger, CockroachDB, Redis, Redpanda, and Kong API routes.
+- `make smoke-test` – Run the comprehensive smoke test script (`./smoke-test.sh`).
+- `make workers` – Inspect the active task list for every Celery worker container.
+- `make test-worker-<svc>` – Dispatch a sample Celery task to a worker queue to verify connectivity.
+- `make proto` – Regenerate protobuf stubs via `generate_protos.sh`.
+- `make db-shell` – Open an interactive CockroachDB SQL shell inside the `cockroach1` container.
+- `make redis-cli` – Launch the Redis CLI authenticated with the configured password.
+- `make kafka-topics` – List Redpanda (Kafka) topics through `rpk`.
 
 If you need direct access to a service container, use `docker compose exec <service> bash` and note that each heartbeat script runs in the foreground printing `[tick n] alive` messages.
 
