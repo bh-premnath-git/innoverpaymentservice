@@ -10,7 +10,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:
@@ -34,7 +35,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:
@@ -52,7 +54,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:
@@ -70,7 +73,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:
@@ -88,7 +92,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:
@@ -106,7 +111,8 @@ services:
         plugins:
           - name: openid-connect
             config:
-              issuer: http://keycloak:8080/realms/innover
+              issuer: http://localhost:8081/realms/innover
+              discovery: http://keycloak:8080/realms/innover/.well-known/openid-configuration
               client_id: kong
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               scopes:

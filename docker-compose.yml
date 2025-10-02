@@ -3,6 +3,10 @@ x-svc-env: &svc_env
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secret}
+
+x-extra-hosts: &extra_hosts
+  - "host.docker.internal:host-gateway"
+
 x-default-deploy: &default_deploy
   resources:
     limits:
@@ -77,6 +81,10 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      KC_HOSTNAME_URL: http://localhost:8081
+      KC_HOSTNAME_ADMIN_URL: http://localhost:8081
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     ports:
@@ -110,6 +118,8 @@ services:
     ports:
       - "8000:8000"
       - "8001:8001"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       keycloak:
         condition: service_healthy
@@ -290,6 +300,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -326,6 +337,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -346,6 +358,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -382,6 +395,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -402,6 +416,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -438,6 +453,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -458,6 +474,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -494,6 +511,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -514,6 +532,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -556,6 +575,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -582,6 +602,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -618,6 +639,7 @@ services:
       DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
     depends_on:
       otel-collector:
         condition: service_healthy
