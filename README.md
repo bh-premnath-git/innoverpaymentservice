@@ -140,79 +140,119 @@ The target quietly installs `grpcio-tools` if it is missing before running the s
 
 ## Repository layout
 ```
-innover/
-├─ services/
-│  ├─ forex/
-│  │  ├─ Dockerfile
-│  │  └─ app/
-│  │     ├─ main.py
-│  │     ├─ otel.py
-│  │     └─ requirements.txt
-│  ├─ ledger/
-│  │  ├─ Dockerfile
-│  │  └─ app/
-│  │     ├─ main.py
-│  │     ├─ otel.py
-│  │     └─ requirements.txt
-│  ├─ payment/
-│  │  ├─ Dockerfile
-│  │  └─ app/
-│  │     ├─ main.py
-│  │     ├─ otel.py
-│  │     └─ requirements.txt
-│  ├─ profile/
-│  │  ├─ Dockerfile
-│  │  └─ app/
-│  │     ├─ main.py
-│  │     ├─ otel.py
-│  │     └─ requirements.txt
-│  ├─ rule-engine/
-│  │  ├─ Dockerfile
-│  │  └─ app/
-│  │     ├─ main.py
-│  │     ├─ otel.py
-│  │     └─ requirements.txt
-│  └─ wallet/
-│     ├─ Dockerfile
-│     └─ app/
-│        ├─ main.py
-│        ├─ otel.py
-│        └─ requirements.txt
-├─ protos/
-│  ├─ forex/ v1/
-│  │  ├─ forex.proto
-│  ├─ ledger/ v1/
-│  │  ├─ ledger.proto
-│  ├─ payment/ v1/
-│  │  ├─ payment.proto
-│  ├─ profile/ v1/
-│  │  ├─ profile.proto
-│  ├─ rule-engine/ v1/
-│  │  ├─ rule-engine.proto
-│  └─ wallet/ v1/
-│     ├─ wallet.proto
-│
+.
+├─ .env
+├─ Makefile
+├─ README.md
+├─ docker-compose.yml
+├─ generate_protos.sh
+├─ smoke-test.sh
 ├─ keycloak/
+│  ├─ Dockerfile
 │  └─ realm-export.json
 ├─ kong/
-│  └─ kong.yml
+│  ├─ Dockerfile
+│  ├─ kong.yml
+│  └─ vendor/
+│     └─ openid-connect/
+│        ├─ LICENSE
+│        ├─ README.md
+│        ├─ filter.lua
+│        ├─ handler.lua
+│        ├─ schema.lua
+│        ├─ session.lua
+│        └─ utils.lua
 ├─ otel/
+│  ├─ Dockerfile
 │  └─ collector.yaml
+├─ protos/
+│  ├─ forex/
+│  │  └─ v1/
+│  │     └─ forex.proto
+│  ├─ ledger/
+│  │  └─ v1/
+│  │     └─ ledger.proto
+│  ├─ payment/
+│  │  └─ v1/
+│  │     └─ payment.proto
+│  ├─ profile/
+│  │  └─ v1/
+│  │     └─ profile.proto
+│  ├─ rule-engine/
+│  │  └─ v1/
+│  │     └─ rule-engine.proto
+│  └─ wallet/
+│     └─ v1/
+│        └─ wallet.proto
 ├─ sandbox/
 │  └─ maintest.py
-├─ .env
-├─ generate_protos.sh
-├─ docker-compose.yml
-├─ Makefile
-innoverpaymentservice/
-├─ services/            # Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding
-├─ protos/              # Versioned gRPC API definitions per domain
-├─ keycloak/            # Realm export consumed during Keycloak startup
-├─ kong/                # Declarative Kong configuration with OIDC plugins
-├─ otel/                # OpenTelemetry Collector pipeline
-├─ docker-compose.yml   # Orchestrates services, infrastructure, and bootstrap jobs
-├─ Makefile             # Convenience targets for the local workflow
-├─ generate_protos.sh   # Regenerates gRPC stubs into each service directory
-└─ sandbox/             # Scratch space for experiments
+└─ services/
+   ├─ forex/
+   │  ├─ Dockerfile
+   │  └─ app/
+   │     ├─ __init__.py
+   │     ├─ celery_app.py
+   │     ├─ main.py
+   │     ├─ otel.py
+   │     ├─ requirements.txt
+   │     └─ tasks.py
+   ├─ ledger/
+   │  ├─ Dockerfile
+   │  └─ app/
+   │     ├─ __init__.py
+   │     ├─ celery_app.py
+   │     ├─ main.py
+   │     ├─ otel.py
+   │     ├─ requirements.txt
+   │     └─ tasks.py
+   ├─ payment/
+   │  ├─ Dockerfile
+   │  └─ app/
+   │     ├─ __init__.py
+   │     ├─ celery_app.py
+   │     ├─ main.py
+   │     ├─ otel.py
+   │     ├─ requirements.txt
+   │     └─ tasks.py
+   ├─ profile/
+   │  ├─ Dockerfile
+   │  └─ app/
+   │     ├─ __init__.py
+   │     ├─ celery_app.py
+   │     ├─ main.py
+   │     ├─ otel.py
+   │     ├─ requirements.txt
+   │     └─ tasks.py
+   ├─ rule-engine/
+   │  ├─ Dockerfile
+   │  └─ app/
+   │     ├─ __init__.py
+   │     ├─ celery_app.py
+   │     ├─ main.py
+   │     ├─ otel.py
+   │     ├─ requirements.txt
+   │     └─ tasks.py
+   └─ wallet/
+      ├─ Dockerfile
+      └─ app/
+         ├─ __init__.py
+         ├─ celery_app.py
+         ├─ main.py
+         ├─ otel.py
+         ├─ requirements.txt
+         └─ tasks.py
 ```
+
+Key directories at the repository root:
+
+- `services/` – Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding.
+- `protos/` – Versioned gRPC API definitions per domain.
+- `keycloak/` – Realm export and Dockerfile consumed during Keycloak startup.
+- `kong/` – Declarative Kong configuration with the vendored OpenID Connect plugin.
+- `otel/` – OpenTelemetry Collector pipeline.
+- `docker-compose.yml` – Orchestrates services, infrastructure, and bootstrap jobs.
+- `Makefile` – Convenience targets for the local workflow.
+- `generate_protos.sh` – Regenerates gRPC stubs into each service directory.
+- `smoke-test.sh` – Basic smoke test script for the stack.
+- `sandbox/` – Scratch space for experiments.
 Use this map to locate the right directories as you flesh out APIs, persistence, and messaging logic.
