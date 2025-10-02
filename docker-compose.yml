@@ -303,7 +303,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "profile-worker@%h"
+        "profile-worker@%h",
+        "--queues",
+        "profile-tasks"
       ]
     environment:
       <<: *svc_env
@@ -357,7 +359,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "payment-worker@%h"
+        "payment-worker@%h",
+        "--queues",
+        "payment-tasks"
       ]
     environment:
       <<: *svc_env
@@ -411,7 +415,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "ledger-worker@%h"
+        "ledger-worker@%h",
+        "--queues",
+        "ledger-tasks"
       ]
     environment:
       <<: *svc_env
@@ -465,7 +471,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "wallet-worker@%h"
+        "wallet-worker@%h",
+        "--queues",
+        "wallet-tasks"
       ]
     environment:
       <<: *svc_env
@@ -519,7 +527,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "rule-engine-worker@%h"
+        "rule-engine-worker@%h",
+        "--queues",
+        "rule-engine-tasks"
       ]
     environment:
       <<: *svc_env
@@ -573,7 +583,9 @@ services:
         "--concurrency",
         "2",
         "--hostname",
-        "forex-worker@%h"
+        "forex-worker@%h",
+        "--queues",
+        "forex-tasks"
       ]
     environment:
       <<: *svc_env
