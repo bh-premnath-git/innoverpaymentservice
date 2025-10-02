@@ -16,7 +16,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
@@ -44,7 +44,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
@@ -66,7 +66,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
@@ -88,7 +88,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
@@ -110,7 +110,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
@@ -132,7 +132,7 @@ services:
               client_secret: ${KONG_OIDC_CLIENT_SECRET}
               bearer_only: true
               introspection_endpoint: http://keycloak:8080/realms/innover/protocol/openid-connect/token/introspect
-              introspection_endpoint_auth_method: client_secret_post
+              introspection_endpoint_auth_method: client_secret_basic
               scopes:
                 - openid
                 - profile
