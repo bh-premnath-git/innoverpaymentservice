@@ -1,5 +1,5 @@
 # services/profile/Dockerfile
-FROM python:3.14.0rc3-slim-trixie
+FROM python:3.12-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential \
