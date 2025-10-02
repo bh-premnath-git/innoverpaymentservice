@@ -47,7 +47,7 @@ services:
       - "16686:16686"
       - "4317:4317"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:14269/health"]
+      test: ["CMD-SHELL", "curl -fsS http://localhost:14269/"]
       interval: 10s
       timeout: 5s
       retries: 5
