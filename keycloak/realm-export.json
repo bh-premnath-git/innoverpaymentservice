@@ -128,5 +128,82 @@
             ]
         }
     ],
-    "browserFlow": "innover-browser"
+    "browserFlow": "innover-browser",
+    "users": [
+        {
+            "username": "admin",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "admin",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "admin"
+            ]
+        },
+        {
+            "username": "ops_user",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "ops_user",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "ops_user"
+            ]
+        },
+        {
+            "username": "finance",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "finance",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "finance"
+            ]
+        },
+        {
+            "username": "auditor",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "auditor",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "auditor"
+            ]
+        },
+        {
+            "username": "user",
+            "enabled": true,
+            "emailVerified": true,
+            "credentials": [
+                {
+                    "type": "password",
+                    "value": "user",
+                    "temporary": false
+                }
+            ],
+            "realmRoles": [
+                "user"
+            ]
+        }
+    ]
 }
