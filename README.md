@@ -13,7 +13,7 @@ This repository is a fully containerized playground for an event-driven payments
 7. [Repository layout](#repository-layout)
 
 ## Service catalog
-Each business domain lives in `services/<name>` and ships with both an HTTP placeholder (the `app/main.py` heartbeat) **and** a Celery worker that exercises the async infrastructure. The pattern is identical across all six domains:
+Each business domain lives in `services/<name>` and ships with both an HTTP placeholder FastAPI app (see `services/<service>/app/main.py`) **and** a Celery worker that exercises the async infrastructure. The pattern is identical across all six domains:
 
 | Service | Example scope | Runtime containers | Entrypoint(s) | Default env wiring |
 |---------|---------------|-------------------|---------------|--------------------|
@@ -24,7 +24,7 @@ Each business domain lives in `services/<name>` and ships with both an HTTP plac
 | `rule-engine` | Decisioning / risk controls | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
 | `forex` | FX quote ingestion | API + Celery worker | `app/main.py`, `celery -A celery_app worker` | `SERVICE_NAME` (per container), CockroachDB URL, Redis broker, Redpanda brokers, OTEL, OIDC |
 
-The `app/main.py` process still prints a startup banner that includes the injected `SERVICE_NAME`, then emits a tick every five seconds so the container stays healthy while you build real functionality. Each service also exposes a `celery_app.py`/`tasks.py` module pair so you can fire real jobs through Redis. All services share the same Dockerfile template that installs optional requirements, copies the app directory, adds a health check, and runs either the heartbeat script or the Celery worker with unbuffered logging. The `docker-compose.yml` file fans each container out with identical environment variables for CockroachDB, Redis, Redpanda, OpenTelemetry, and Keycloak integration.
+The `app/main.py` process exposes `/health` and `/readiness` endpoints that surface the injected `SERVICE_NAME` through FastAPI so the container stays responsive while you build real functionality. Each container keeps running by invoking `uvicorn main:app`, while Docker Compose launches the Celery workers separately via `celery -A celery_app worker`. Each service also exposes a `celery_app.py`/`tasks.py` module pair so you can fire real jobs through Redis. All services share the same Dockerfile template that installs optional requirements, copies the app directory, adds a health check, and runs either the Uvicorn process or the Celery worker with unbuffered logging. The `docker-compose.yml` file fans each container out with identical environment variables for CockroachDB, Redis, Redpanda, OpenTelemetry, and Keycloak integration.
 
 ### Asynchronous jobs
 
