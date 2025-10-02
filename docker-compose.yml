@@ -69,13 +69,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    deploy: *support_deploy
     restart: unless-stopped
 
   keycloak:
     build:
       context: ./keycloak
-    command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
