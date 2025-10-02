@@ -60,7 +60,9 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    build:
+      context: .
+      dockerfile: otel/Dockerfile
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./otel/collector.yaml:/etc/otelcol/config.yaml:ro
