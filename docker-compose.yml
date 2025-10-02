@@ -34,11 +34,11 @@ x-light-deploy: &light_deploy
       memory: 256M
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health?ready=1"]
+  test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=localhost:26257", "-e", "SELECT 1"]
   interval: 10s
-  timeout: 5s
-  retries: 5
-  start_period: 30s
+  timeout: 10s
+  retries: 10
+  start_period: 60s
 
 services:
   jaeger:
@@ -84,7 +84,7 @@ services:
     ports:
       - "8081:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health/ready"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200 OK'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -144,7 +144,12 @@ services:
       - "8082:8080"     # Admin UI
     volumes:
       - cockroach1:/cockroach/cockroach-data
-    healthcheck: *cockroach_healthcheck
+    healthcheck:
+      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach1:26257", "-e", "SELECT 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
 
@@ -167,7 +172,12 @@ services:
     depends_on:
       cockroach1:
         condition: service_started
-    healthcheck: *cockroach_healthcheck
+    healthcheck:
+      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach2:26257", "-e", "SELECT 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
 
@@ -190,7 +200,12 @@ services:
     depends_on:
       cockroach2:
         condition: service_started
-    healthcheck: *cockroach_healthcheck
+    healthcheck:
+      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach3:26257", "-e", "SELECT 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
 
@@ -648,11 +663,11 @@ services:
     volumes:
       - redpanda:/var/lib/redpanda/data
     healthcheck:
-      test: ["CMD-SHELL", "rpk cluster health --brokers localhost:9092 --exit-when-healthy --timeout 5s"]
+      test: ["CMD-SHELL", "rpk cluster health --exit-when-healthy"]
       interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     deploy:
       resources:
         limits:
