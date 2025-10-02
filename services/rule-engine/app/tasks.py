@@ -3,6 +3,13 @@ import time
 from celery_app import celery_app
 
 
+@celery_app.task(name="tasks.echo")
+def echo(msg):
+    """Echo a message back."""
+    print(f"[RULE-ENGINE WORKER] Echo: {msg}")
+    return msg
+
+
 @celery_app.task(name="rule_engine.add")
 def add(x, y):
     """Add two numbers together."""

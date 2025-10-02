@@ -88,3 +88,47 @@ services:
               upstream_headers_names:
                 - x-sub
                 - x-username
+  - name: profile-svc
+    url: http://profile:8000
+    routes:
+      - name: profile
+        paths:
+          - /api/profile
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/innover
+              client_id: kong
+              client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              scopes:
+                - openid
+                - profile
+              upstream_headers_claims:
+                - sub
+                - preferred_username
+              upstream_headers_names:
+                - x-sub
+                - x-username
+  - name: payment-svc
+    url: http://payment:8000
+    routes:
+      - name: payment
+        paths:
+          - /api/payment
+        strip_path: false
+        plugins:
+          - name: openid-connect
+            config:
+              issuer: http://keycloak:8080/realms/innover
+              client_id: kong
+              client_secret: ${KONG_OIDC_CLIENT_SECRET}
+              scopes:
+                - openid
+                - profile
+              upstream_headers_claims:
+                - sub
+                - preferred_username
+              upstream_headers_names:
+                - x-sub
+                - x-username
