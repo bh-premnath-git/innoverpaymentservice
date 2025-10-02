@@ -34,7 +34,7 @@ x-light-deploy: &light_deploy
       memory: 256M
 
 x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD-SHELL", "curl -fsS http://$(hostname -f):8080/health || exit 0"]
+  test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health?ready=1"]
   interval: 10s
   timeout: 5s
   retries: 5
