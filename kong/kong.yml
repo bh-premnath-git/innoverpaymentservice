@@ -16,12 +16,14 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
+              upstream_headers_claims: &oidc_claims
                 - sub
                 - preferred_username
-              upstream_headers_names:
+                - roles
+              upstream_headers_names: &oidc_headers
                 - x-sub
                 - x-username
+                - x-roles
   - name: wallet-svc
     url: http://wallet:8000
     routes:
@@ -38,12 +40,8 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
-                - sub
-                - preferred_username
-              upstream_headers_names:
-                - x-sub
-                - x-username
+              upstream_headers_claims: *oidc_claims
+              upstream_headers_names: *oidc_headers
   - name: rule-engine-svc
     url: http://rule-engine:8000
     routes:
@@ -60,12 +58,8 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
-                - sub
-                - preferred_username
-              upstream_headers_names:
-                - x-sub
-                - x-username
+              upstream_headers_claims: *oidc_claims
+              upstream_headers_names: *oidc_headers
   - name: forex-svc
     url: http://forex:8000
     routes:
@@ -82,12 +76,8 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
-                - sub
-                - preferred_username
-              upstream_headers_names:
-                - x-sub
-                - x-username
+              upstream_headers_claims: *oidc_claims
+              upstream_headers_names: *oidc_headers
   - name: profile-svc
     url: http://profile:8000
     routes:
@@ -104,12 +94,8 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
-                - sub
-                - preferred_username
-              upstream_headers_names:
-                - x-sub
-                - x-username
+              upstream_headers_claims: *oidc_claims
+              upstream_headers_names: *oidc_headers
   - name: payment-svc
     url: http://payment:8000
     routes:
@@ -126,9 +112,5 @@ services:
               scopes:
                 - openid
                 - profile
-              upstream_headers_claims:
-                - sub
-                - preferred_username
-              upstream_headers_names:
-                - x-sub
-                - x-username
+              upstream_headers_claims: *oidc_claims
+              upstream_headers_names: *oidc_headers
