@@ -70,6 +70,7 @@ still honour the cgroup constraints when the stack is running locally.
 The identity layer is prewired so that local OAuth/OIDC flows work out of the box:
 
 - `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `kong` client. Keep the `secret` field for that client in lock-step with the `KONG_OIDC_CLIENT_SECRET` value in `.env`, otherwise Kong will be unable to complete the authorization-code exchange.
+- The realm ships with ready-to-use users for every role so you can exercise sign-in flows immediately. Each account's password matches its username: `admin`, `ops_user`, `finance`, `auditor`, and `user`.
 - The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments. The shipped export restricts redirect and post-logout URIs to `http://localhost:8000/*`, so add extra origins in the realm if you proxy Kong somewhere else.
 - `kong/kong.yml` creates declarative services and routes (`/api/ledger`, `/api/wallet`, `/api/rules`, `/api/fx`) with the OpenID Connect plugin set to inject `sub` and `preferred_username` headers into each upstream request once tokens are validated. The claims arrive as `x-sub` and `x-username` headers on the upstream request.
 
