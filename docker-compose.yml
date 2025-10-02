@@ -145,10 +145,10 @@ services:
     volumes:
       - cockroach1:/cockroach/cockroach-data
     healthcheck:
-      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach1:26257", "-e", "SELECT 1"]
+      test: ["CMD", "curl", "-f", "http://cockroach1:8080/health?ready=1"]
       interval: 10s
-      timeout: 10s
-      retries: 10
+      timeout: 5s
+      retries: 30
       start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
@@ -173,10 +173,10 @@ services:
       cockroach1:
         condition: service_started
     healthcheck:
-      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach2:26257", "-e", "SELECT 1"]
+      test: ["CMD", "curl", "-f", "http://cockroach2:8080/health?ready=1"]
       interval: 10s
-      timeout: 10s
-      retries: 10
+      timeout: 5s
+      retries: 30
       start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
@@ -201,10 +201,10 @@ services:
       cockroach2:
         condition: service_started
     healthcheck:
-      test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=cockroach3:26257", "-e", "SELECT 1"]
+      test: ["CMD", "curl", "-f", "http://cockroach3:8080/health?ready=1"]
       interval: 10s
-      timeout: 10s
-      retries: 10
+      timeout: 5s
+      retries: 30
       start_period: 60s
     restart: unless-stopped
     deploy: *db_deploy
@@ -237,11 +237,11 @@ services:
         /cockroach/cockroach init --insecure --host=cockroach1:26357 || echo "Cluster already initialized"
     depends_on:
       cockroach1:
-        condition: service_healthy
+        condition: service_started
       cockroach2:
-        condition: service_healthy
+        condition: service_started
       cockroach3:
-        condition: service_healthy
+        condition: service_started
     restart: "no"
     deploy: *default_deploy
 
