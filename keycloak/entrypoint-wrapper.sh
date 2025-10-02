@@ -16,8 +16,8 @@ until curl -sf http://localhost:9000/health/ready > /dev/null 2>&1; do
     sleep 2
 done
 
-echo "Keycloak is ready. Waiting 10 more seconds for full initialization..."
-sleep 10
+echo "Keycloak is ready. Waiting 5 more seconds for full initialization..."
+sleep 5
 
 # Run user creation script in the background
 echo "Starting user creation..."
