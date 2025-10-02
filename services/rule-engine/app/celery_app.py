@@ -24,4 +24,5 @@ celery_app.conf.update(
     timezone="UTC",
     task_default_queue=queue_name,
     task_queues=(Queue(queue_name),),
+    broker_connection_retry_on_startup=True,
 )
