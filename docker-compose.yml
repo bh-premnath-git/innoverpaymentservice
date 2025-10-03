@@ -313,6 +313,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8001:8000"  # Expose profile service
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -371,6 +373,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8002:8000"  # Expose payment service
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -429,6 +433,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8003:8000"  # Expose ledger service
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -487,6 +493,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8004:8000"  # Expose wallet service
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -545,6 +553,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8005:8000"  # Expose rule-engine service
     depends_on:
       otel-collector:
         condition: service_healthy
@@ -615,6 +625,8 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
+    ports:
+      - "8006:8000"  # Expose forex service
     depends_on:
       otel-collector:
         condition: service_healthy

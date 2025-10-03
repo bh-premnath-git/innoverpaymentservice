@@ -41,6 +41,7 @@ class WSO2APIPublisher:
             "policies": api_config.get("policies", global_settings.get("throttling_policies", ["Unlimited"])),
             "visibility": api_config.get("visibility", global_settings.get("visibility", "PUBLIC")),
             "securityScheme": api_config.get("securityScheme", global_settings.get("security_schemes", ["oauth2"])),
+            "keyManagers": api_config.get("keyManagers", ["all"]),  # Use all Key Managers (includes Keycloak)
             "transport": api_config.get("transport", global_settings.get("transport", ["http", "https"])),
             "tags": api_config.get("tags", []),
         }

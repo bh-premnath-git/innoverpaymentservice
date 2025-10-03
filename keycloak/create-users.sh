@@ -52,14 +52,18 @@ create_user() {
     else
         echo "Creating user '$username'..."
         
-        # Create user
+        # Create user with all required fields
         CREATE_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8080/admin/realms/innover/users" \
             -H "Authorization: Bearer ${ADMIN_TOKEN}" \
             -H "Content-Type: application/json" \
             -d "{
                 \"username\": \"${username}\",
+                \"email\": \"${username}@innover.local\",
+                \"firstName\": \"${username}\",
+                \"lastName\": \"${username}\",
                 \"enabled\": true,
                 \"emailVerified\": true,
+                \"requiredActions\": [],
                 \"credentials\": [{
                     \"type\": \"password\",
                     \"value\": \"${password}\",
@@ -81,14 +85,21 @@ create_user() {
         fi
     fi
     
-    # Remove any required actions
+    # Ensure user is fully set up
     if [ -n "$USER_ID" ]; then
-        echo "Removing required actions for user '$username'..."
+        echo "Ensuring user '$username' is fully configured..."
         curl -s -X PUT "http://localhost:8080/admin/realms/innover/users/${USER_ID}" \
             -H "Authorization: Bearer ${ADMIN_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"requiredActions\":[]}"
-        echo "Required actions removed for user '$username'"
+            -d "{
+                \"email\": \"${username}@innover.local\",
+                \"firstName\": \"${username}\",
+                \"lastName\": \"${username}\",
+                \"enabled\": true,
+                \"emailVerified\": true,
+                \"requiredActions\": []
+            }"
+        echo "User '$username' fully configured"
     fi
     
     # Assign role
@@ -124,9 +135,9 @@ create_user "user" "user" "user"
 echo "=========================================="
 echo "All users created/updated successfully!"
 
-# Configure WSO2 API Manager client for introspection
+# Configure WSO2 API Manager client for direct access grants
 echo ""
-echo "Configuring WSO2 API Manager client for introspection..."
+echo "Configuring WSO2 API Manager client..."
 WSO2_CLIENT_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=wso2am" \
     -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
 
@@ -134,65 +145,14 @@ if [ -n "$WSO2_CLIENT_ID" ]; then
     curl -s -X PUT "http://localhost:8080/admin/realms/innover/clients/${WSO2_CLIENT_ID}" \
         -H "Authorization: Bearer ${ADMIN_TOKEN}" \
         -H "Content-Type: application/json" \
-        -d '{"serviceAccountsEnabled":true}'
-    echo "✓ WSO2 API Manager client configured"
+        -d '{"directAccessGrantsEnabled":true,"serviceAccountsEnabled":true}'
+    echo "✓ WSO2 API Manager client configured (direct access grants enabled)"
 fi
-
-# Create postman-test client
-echo "Creating postman-test client..."
-POSTMAN_EXISTS=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=postman-test" \
-    -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"clientId":"postman-test"')
-
-if [ -z "$POSTMAN_EXISTS" ]; then
-    curl -s -X POST "http://localhost:8080/admin/realms/innover/clients" \
-        -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d '{
-            "clientId": "postman-test",
-            "name": "API Testing Client",
-            "enabled": true,
-            "publicClient": false,
-            "secret": "postman-secret",
-            "directAccessGrantsEnabled": true,
-            "serviceAccountsEnabled": true,
-            "standardFlowEnabled": true,
-            "redirectUris": ["*"],
-            "webOrigins": ["*"]
-        }'
-    
-    # Add WSO2 API Manager audience mapper
-    POSTMAN_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=postman-test" \
-        -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
-    
-    if [ -n "$POSTMAN_ID" ]; then
-        curl -s -X POST "http://localhost:8080/admin/realms/innover/clients/${POSTMAN_ID}/protocol-mappers/models" \
-            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "wso2am-audience",
-                "protocol": "openid-connect",
-                "protocolMapper": "oidc-audience-mapper",
-                "config": {
-                    "included.client.audience": "wso2am",
-                    "id.token.claim": "false",
-                    "access.token.claim": "true"
-                }
-            }'
-        echo "✓ postman-test client created with WSO2 API Manager audience"
-    fi
-fi
-
-# Create apitest user
-echo "Creating apitest user..."
-create_user "apitest" "test123" ""
 
 echo ""
-echo "=========================================="
-echo "Setup complete! You can log in with:"
+echo "You can now log in with:"
 echo "  - admin/admin"
-echo "  - apitest/test123 (for API testing)"
-echo ""
-echo "API Testing:"
-echo "  Client: postman-test / postman-secret"
-echo "  Token URL: http://localhost/auth/realms/innover/protocol/openid-connect/token"
-echo "=========================================="
+echo "  - ops_user/ops_user"
+echo "  - finance/finance"
+echo "  - auditor/auditor"
+echo "  - user/user"
