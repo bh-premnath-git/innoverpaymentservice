@@ -46,22 +46,14 @@ proto:
 
 # Show all service URLs
 urls:
-	@echo "=== Service URLs ==="
-	@echo "Keycloak Admin:  http://localhost:8081 (admin/admin)"
-	@echo "Kong Proxy:      http://localhost:8000"
-	@echo "Kong Admin:      http://localhost:8001"
-	@echo "Jaeger UI:       http://localhost:16686"
-	@echo "CockroachDB UI:  http://localhost:8082"
-	@echo "Redis:           localhost:6379"
-	@echo "Redpanda:        localhost:9092"
-	@echo ""
-	@echo "=== Kong API Routes ==="
-	@echo "Profile:         http://localhost:8000/api/profile/health"
-	@echo "Payment:         http://localhost:8000/api/payment/health"
-	@echo "Forex:           http://localhost:8000/api/fx/health"
-	@echo "Ledger:          http://localhost:8000/api/ledger/health"
-	@echo "Wallet:          http://localhost:8000/api/wallet/health"
-	@echo "Rule Engine:     http://localhost:8000/api/rules/health"
+@echo "=== Service URLs ==="
+@echo "Keycloak Admin:  http://localhost:8081 (admin/admin)"
+@echo "WSO2 Admin:      https://localhost:9443/carbon (admin/admin)"
+@echo "WSO2 Dev Portal: https://localhost:9443/devportal"
+@echo "Jaeger UI:       http://localhost:16686"
+@echo "CockroachDB UI:  http://localhost:8082"
+@echo "Redis:           localhost:6379"
+@echo "Redpanda:        localhost:9092"
 
 # Run comprehensive smoke tests
 smoke-test:

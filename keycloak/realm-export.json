@@ -24,14 +24,14 @@
     },
     "clients": [
         {
-            "clientId": "kong",
-            "name": "Kong Gateway",
+            "clientId": "wso2am",
+            "name": "WSO2 API Manager",
             "enabled": true,
             "protocol": "openid-connect",
             "publicClient": false,
-            "secret": "kong-secret",
+            "secret": "wso2am-secret",
             "redirectUris": [
-                "http://localhost:8000/*"
+                "https://localhost:9443/*"
             ],
             "webOrigins": [
                 "+"
@@ -39,7 +39,7 @@
             "standardFlowEnabled": true,
             "directAccessGrantsEnabled": false,
             "attributes": {
-                "post.logout.redirect.uris": "http://localhost:8000/*"
+                "post.logout.redirect.uris": "https://localhost:9443/*"
             },
             "protocolMappers": [
                 {
