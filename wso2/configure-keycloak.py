@@ -58,6 +58,17 @@ class WSO2KeyManagerConfigurator:
                 return km
         return None
 
+    def delete_key_manager(self, km_id: str) -> bool:
+        try:
+            response = self.session.delete(f"{self.admin_api}/key-managers/{km_id}")
+            if response.status_code in (200, 204):
+                print(f"✅ Deleted Key Manager (ID: {km_id})")
+                return True
+            print(f"⚠️  Failed to delete Key Manager: {response.status_code}")
+        except Exception as exc:
+            print(f"⚠️  Error deleting Key Manager: {exc}")
+        return False
+
     def _payload(self, config: Dict[str, str]) -> Dict[str, object]:
         return {
             "name": "Keycloak",
@@ -188,7 +199,7 @@ def get_keycloak_config() -> Dict[str, str]:
         return {
             "client_id": client_id,
             "client_secret": client_secret,
-            "issuer": well_known.get("issuer", issuer),
+            "issuer": issuer,  # Always use configured issuer (localhost for host tokens)
             "introspection_endpoint": well_known.get("introspection_endpoint", f"{internal_realm}/protocol/openid-connect/token/introspect"),
             "token_endpoint": well_known.get("token_endpoint", f"{internal_realm}/protocol/openid-connect/token"),
             "revoke_endpoint": well_known.get("revocation_endpoint", f"{internal_realm}/protocol/openid-connect/revoke"),
@@ -267,8 +278,18 @@ def main() -> None:
 
     if existing_km:
         print(f"✅ Keycloak Key Manager already exists (ID: {existing_km['id']})")
-        print("   Skipping configuration (already set up)")
-        result = existing_km
+        print("   Deleting existing Key Manager to recreate with correct issuer...")
+        if configurator.delete_key_manager(existing_km['id']):
+            import time
+            time.sleep(2)
+            print("📝 Creating new Keycloak Key Manager...")
+            result = configurator.configure(keycloak_config)
+            if not result:
+                print("\n❌ Failed to configure Keycloak integration")
+                sys.exit(1)
+        else:
+            print("\n⚠️  Failed to delete existing Key Manager, skipping reconfiguration")
+            result = existing_km
     else:
         print("📝 Creating new Keycloak Key Manager...")
         result = configurator.configure(keycloak_config)

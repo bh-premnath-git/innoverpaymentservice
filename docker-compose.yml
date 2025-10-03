@@ -149,7 +149,7 @@ services:
       WSO2_ADMIN_USERNAME: admin
       WSO2_ADMIN_PASSWORD: admin
       KEYCLOAK_INTERNAL_REALM_URL: http://keycloak:8080/realms/innover
-      KEYCLOAK_ISSUER: http://keycloak:8080/realms/innover
+      KEYCLOAK_ISSUER: http://localhost:8080/realms/innover
       WSO2_AM_CLIENT_ID: ${WSO2_AM_CLIENT_ID:-wso2am}
       WSO2_AM_CLIENT_SECRET: ${WSO2_AM_CLIENT_SECRET:-wso2am-secret}
     depends_on:
