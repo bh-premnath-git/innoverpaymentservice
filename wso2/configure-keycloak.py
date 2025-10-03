@@ -233,9 +233,13 @@ def get_keycloak_config() -> Dict[str, str]:
         "KEYCLOAK_INTERNAL_REALM_URL",
         env_from_file.get("KEYCLOAK_INTERNAL_REALM_URL", "http://keycloak:8080/realms/innover"),
     ).rstrip("/")
+    public_realm = os.getenv(
+        "KEYCLOAK_PUBLIC_REALM_URL",
+        env_from_file.get("KEYCLOAK_PUBLIC_REALM_URL", internal_realm),
+    ).rstrip("/")
     issuer = os.getenv(
         "KEYCLOAK_ISSUER",
-        env_from_file.get("KEYCLOAK_ISSUER", internal_realm),
+        env_from_file.get("KEYCLOAK_ISSUER", public_realm),
     ).rstrip("/")
     connector_type_hint = os.getenv(
         "KEYCLOAK_CONNECTOR_TYPE",
@@ -250,35 +254,30 @@ def get_keycloak_config() -> Dict[str, str]:
     
     if well_known:
         print("✅ Using endpoints from .well-known configuration")
-        return {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "issuer": issuer,  # Always use configured issuer (localhost for host tokens)
-            "introspection_endpoint": well_known.get("introspection_endpoint", f"{internal_realm}/protocol/openid-connect/token/introspect"),
-            "token_endpoint": well_known.get("token_endpoint", f"{internal_realm}/protocol/openid-connect/token"),
-            "revoke_endpoint": well_known.get("revocation_endpoint", f"{internal_realm}/protocol/openid-connect/revoke"),
-            "userinfo_endpoint": well_known.get("userinfo_endpoint", f"{internal_realm}/protocol/openid-connect/userinfo"),
-            "authorize_endpoint": well_known.get("authorization_endpoint", f"{internal_realm}/protocol/openid-connect/auth"),
-            "jwks_endpoint": well_known.get("jwks_uri", f"{internal_realm}/protocol/openid-connect/certs"),
-            "well_known": well_known_url,
-            "connector_type_hint": connector_type_hint,
-        }
     else:
-        # Fallback to manual construction
         print("⚠️  Using fallback endpoint construction")
-        return {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "issuer": issuer,
-            "introspection_endpoint": f"{internal_realm}/protocol/openid-connect/token/introspect",
-            "token_endpoint": f"{internal_realm}/protocol/openid-connect/token",
-            "revoke_endpoint": f"{internal_realm}/protocol/openid-connect/revoke",
-            "userinfo_endpoint": f"{internal_realm}/protocol/openid-connect/userinfo",
-            "authorize_endpoint": f"{internal_realm}/protocol/openid-connect/auth",
-            "jwks_endpoint": f"{internal_realm}/protocol/openid-connect/certs",
-            "well_known": well_known_url,
-            "connector_type_hint": connector_type_hint,
-        }
+
+    def internal_endpoint(suffix: str) -> str:
+        return f"{internal_realm}/protocol/openid-connect/{suffix}"
+
+    def public_endpoint(suffix: str) -> str:
+        return f"{public_realm}/protocol/openid-connect/{suffix}"
+
+    return {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "issuer": issuer,
+        # Internal endpoints are reachable from containers without host networking
+        "introspection_endpoint": internal_endpoint("token/introspect"),
+        "token_endpoint": internal_endpoint("token"),
+        "revoke_endpoint": internal_endpoint("revoke"),
+        "userinfo_endpoint": internal_endpoint("userinfo"),
+        "jwks_endpoint": internal_endpoint("certs"),
+        # Browser redirects must resolve from the host machine, so we prefer the public realm URL
+        "authorize_endpoint": public_endpoint("auth"),
+        "well_known": well_known_url,
+        "connector_type_hint": connector_type_hint,
+    }
 
 
 def wait_for_service(name: str, url: str, verify: bool = False, retries: int = 40, delay: int = 6) -> bool:
@@ -324,6 +323,8 @@ def main() -> None:
     keycloak_config = get_keycloak_config()
     print("\n📋 Keycloak Configuration:")
     print(f"   Issuer: {keycloak_config['issuer']}")
+    print(f"   Auth Endpoint (public): {keycloak_config['authorize_endpoint']}")
+    print(f"   Token Endpoint (internal): {keycloak_config['token_endpoint']}")
     print(f"   Client ID: {keycloak_config['client_id']}")
     print(f"   Client Secret: {'*' * len(keycloak_config['client_secret'])}")
 
