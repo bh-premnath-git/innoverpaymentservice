@@ -5,7 +5,9 @@ SHELL := /bin/bash
 # Start all services
 up:
 	docker compose up -d --build
-	$(MAKE) configure-keycloak
+	@echo "Waiting for services to be ready..."
+	@sleep 90
+	$(MAKE) setup
 
 # Rebuild without cache
 rebuild:
@@ -47,14 +49,14 @@ proto:
 
 # Show all service URLs
 urls:
-@echo "=== Service URLs ==="
-@echo "Keycloak Admin:  http://localhost:8081 (admin/admin)"
-@echo "WSO2 Admin:      https://localhost:9443/carbon (admin/admin)"
-@echo "WSO2 Dev Portal: https://localhost:9443/devportal"
-@echo "Jaeger UI:       http://localhost:16686"
-@echo "CockroachDB UI:  http://localhost:8082"
-@echo "Redis:           localhost:6379"
-@echo "Redpanda:        localhost:9092"
+	@echo "=== Service URLs ==="
+	@echo "Keycloak Admin:  http://localhost:8081 (admin/admin)"
+	@echo "WSO2 Admin:      https://localhost:9443/carbon (admin/admin)"
+	@echo "WSO2 Dev Portal: https://localhost:9443/devportal"
+	@echo "Jaeger UI:       http://localhost:16686"
+	@echo "CockroachDB UI:  http://localhost:8082"
+	@echo "Redis:           localhost:6379"
+	@echo "Redpanda:        localhost:9092"
 
 # Run comprehensive smoke tests
 smoke-test:
@@ -85,20 +87,26 @@ redis-cli:
 	docker compose exec redis sh -c 'redis-cli -a "$$REDIS_PASSWORD"'
 
 # Kafka topic list
-kafka-topics:
 	docker compose exec redpanda rpk topic list --brokers redpanda:9092
 
-# Publish APIs to WSO2 API Manager
+# Complete setup: Configure Keycloak + Publish APIs
+setup:
+	@echo "Configuring Keycloak Key Manager..."
+	python3 wso2/configure-keycloak.py
+	@echo ""
+	@echo "Publishing APIs to WSO2..."
+	python3 wso2/wso2-publisher-from-config.py
+	@echo ""
+	@echo "Setup complete!"
+
+# Publish APIs to WSO2
 publish-apis:
-	@echo "=== Publishing APIs to WSO2 API Manager ==="
-	@pip install -q requests pyyaml 2>/dev/null || echo "Installing dependencies..."
-	@python3 wso2/wso2-publisher-from-config.py
+	python3 wso2/wso2-publisher-from-config.py
 
 # Configure Keycloak integration with WSO2
 configure-keycloak:
 	@echo "=== Configuring Keycloak Integration with WSO2 ==="
 	@pip install -q requests 2>/dev/null || echo "Installing dependencies..."
-	@python3 wso2/configure-keycloak.py
 
 # Help
 help:

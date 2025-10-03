@@ -134,6 +134,8 @@ services:
     ports:
       - "8280:8280"
       - "9443:9443"
+    volumes:
+      - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
     extra_hosts: *extra_hosts
     healthcheck:
       test: ["CMD-SHELL", "curl -k -fsS https://localhost:9443/services/Version >> /dev/null"]
@@ -733,6 +735,7 @@ services:
 
 volumes:
   keycloak-db:
+  wso2am-data:
   cockroach1:
   cockroach2:
   cockroach3:
