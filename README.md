@@ -51,7 +51,7 @@ The compose stack bootstraps every dependency you need to exercise the services 
 - **Jaeger all-in-one** exposes `http://localhost:16686` for trace inspection and also accepts OTLP traffic on port 4317.
 - **OpenTelemetry Collector** runs the `otel/collector.yaml` pipeline, receiving OTLP traces from the services and forwarding them to Jaeger and a debug exporter for console verification.
 - **Keycloak** starts with the `innover` realm imported from `keycloak/realm-export.json`, listening on `http://localhost:8080` for administrative access and proxied through Nginx at `http://localhost/auth` for OIDC flows.
-- **Kong Gateway** is configured declaratively from `kong/kong.yml`, enabling the OpenID Connect plugin to guard each route while proxying requests to the internal services.
+- **WSO2 API Manager** runs from the official Docker image, exposing the publisher, developer portal, and gateway surfaces (ports 9443/8280) so you can publish and secure APIs in front of the services.
 - **CockroachDB** comes up as a three-node cluster with sequential health-checked startup, followed by automated cluster initialization and database/user bootstrapping jobs so schemas are ready before your services connect. Ports `26257` (SQL) and `8082` (admin UI) are forwarded from the first node.
 - **Redis 7** provides a lightweight cache/message store on `localhost:6379` secured with the password supplied via `REDIS_PASSWORD`.
 - **Redpanda** serves as the Kafka-compatible event broker with a single-node developer configuration bound to `localhost:9092` and persisted in a named volume.
@@ -69,39 +69,25 @@ still honour the cgroup constraints when the stack is running locally.
 ## Identity and API gateway
 The identity layer is prewired so that local OAuth/OIDC flows work out of the box:
 
-- `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `kong` client. Keep the `secret` field for that client in lock-step with the `KONG_OIDC_CLIENT_SECRET` value in `.env`, otherwise Kong will be unable to complete the authorization-code exchange.
-- The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments. The shipped export restricts redirect and post-logout URIs to `http://localhost:8000/*`, so add extra origins in the realm if you proxy Kong somewhere else.
-- `kong/kong.yml` creates declarative services and routes (`/api/ledger`, `/api/wallet`, `/api/rules`, `/api/fx`) with the OpenID Connect plugin set to inject `sub` and `preferred_username` headers into each upstream request once tokens are validated. The claims arrive as `x-sub` and `x-username` headers on the upstream request.
+- `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `wso2am` client used when wiring WSO2 API Manager to Keycloak. Keep the `secret` field for that client in lock-step with the `WSO2_AM_CLIENT_SECRET` value in `.env` so token introspection works as expected.
+- The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments. The shipped export restricts redirect and post-logout URIs to `https://localhost:9443/*`, so add extra origins in the realm if you proxy WSO2 somewhere else.
+- WSO2 API Manager starts with the stock configuration from the upstream image. Use the Publisher portal to create APIs that target the internal services (for example `http://ledger:8000`) and secure them with Keycloak by importing the realm metadata (`http://keycloak:8080/realms/innover/.well-known/openid-configuration`).
 
-### Keycloak + Kong checklist
-1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8080`) and Kong (`http://localhost:8000`) to report healthy.
+### Keycloak + WSO2 API Manager checklist
+1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8080`) and WSO2 API Manager (`https://localhost:9443/carbon`) to report healthy.
 2. Sign in to the Keycloak admin console (`http://localhost:8080/admin`) with the bootstrap credentials declared in `docker-compose.yml`, then create a user with a password and mark it as verified/enabled.
-3. In a second tab, request a service through Kong, e.g. `http://localhost:8000/api/ledger`.
-4. When Kong redirects you to Keycloak, complete the login with the user from step 2. Keycloak returns you to the original `/api/<service>` URL after the authorization code exchange finishes.
-5. Repeat your Kong request (browser refresh or `curl --cookie`) and observe the post-login response. The placeholder services in this repo only emit heartbeat logs, but any real upstream will now receive `x-sub` and `x-username` headers populated with the authenticated subject and username.
+3. Log in to the WSO2 management console with the default `admin/admin` credentials and configure an OAuth2/OpenID Connect identity provider that points at the Keycloak issuer (`http://keycloak:8080/realms/innover`). Use the `wso2am` client credentials from `.env` when WSO2 prompts for the client ID and secret.
+4. Publish an API in WSO2 that targets one of the internal services (for example `http://ledger:8000/health`) and enable OAuth2 security using the Keycloak connection.
+5. Invoke the API through the WSO2 gateway via the developer portal or `curl`, using the HTTPS endpoint on port 9443 (or HTTP on 8280) that corresponds to the context you published.
 
-### Example Kong↔Keycloak flow
-The snippet below shows the round-trip you should expect when exercising the `/api/ledger` route. The first call demonstrates the redirect, the second shows what hits the upstream once the browser session is authenticated:
-
-```bash
-# 1. Kong forces you through Keycloak when no session is present
-curl -i "http://localhost:8000/api/ledger"
-# HTTP/1.1 302 Found
-# location: http://localhost/auth/realms/innover/protocol/openid-connect/auth?client_id=kong&...
-
-# 2. After completing the browser login, reuse the Keycloak session cookie
-curl -i --cookie cookies.txt "http://localhost:8000/api/ledger"
-# HTTP/1.1 200 OK (or the upstream response your service returns)
-# ... forwarded to ledger with headers:
-#   x-sub: <Keycloak user id>
-#   x-username: <preferred_username claim>
-```
-
-To capture the forwarded headers verbatim while you are experimenting, point one of the routes at an HTTP echo service or add temporary logging to your upstream application and watch for the `x-sub` and `x-username` headers after authenticating.
+### WSO2 integration tips
+- Import the Keycloak JWKS endpoint (`http://keycloak:8080/realms/innover/protocol/openid-connect/certs`) so WSO2 can validate issued tokens without manual key rotation.
+- The official WSO2 API Manager Docker samples at <https://github.com/wso2/docker-apim> illustrate how to script API publication and customizations. They are a good starting point for automating gateway configuration inside this stack.
+- When developing locally, consider creating APIs with a unique context (for example `/api/ledger`) so they do not collide with the built-in WSO2 applications.
 
 To customize identity:
 1. Update the realm export file with additional clients, scopes, or roles.
-2. Adjust Kong routes or scopes as new services are added.
+2. Adjust WSO2 API Manager APIs, policies, or endpoints as new services are added.
 3. Restart the relevant containers (`make down && make up`) to reload configuration.
 
 ## Observability
@@ -114,13 +100,13 @@ All Python services ship with OpenTelemetry environment variables that point at 
 - Optional: Python 3.11+ and `grpcio-tools` if you plan to regenerate protobuf stubs outside the containers
 
 ### Environment configuration
--  `.env` and replace placeholder secrets before starting the stack. The compose file now requires a non-placeholder `KONG_OIDC_CLIENT_SECRET` so Kong can authenticate with Keycloak, and other values should be customized to match your local setup.
+-  `.env` and replace placeholder secrets before starting the stack. The compose file now requires a non-placeholder `WSO2_AM_CLIENT_SECRET` so WSO2 API Manager can authenticate with Keycloak, and other values should be customized to match your local setup.
 
 ### Start the stack
 ```bash
 make up
 ```
-`make up` performs a `docker compose up -d --build`, ensuring images are rebuilt before the services launch. Wait for the CockroachDB bootstrap jobs to finish (`docker compose logs -f cockroach-bootstrap`) before hitting APIs through Kong at `http://localhost:8000`.
+`make up` performs a `docker compose up -d --build`, ensuring images are rebuilt before the services launch. Wait for the CockroachDB bootstrap jobs to finish (`docker compose logs -f cockroach-bootstrap`) before publishing or invoking APIs through WSO2 API Manager at `https://localhost:9443`.
 
 ### Useful commands
 - `make up` – Start all containers with a fresh build (`docker compose up -d --build`).
@@ -132,7 +118,7 @@ make up
 - `make restart-<svc>` – Restart a single service when you need to reload configuration quickly.
 - `make down` – Tear down the environment and remove volumes so CockroachDB and Redpanda state resets between experiments.
 - `make nuke` – Remove containers, volumes, and images for a completely clean slate.
-- `make urls` – Echo quick links to Keycloak, Kong, Jaeger, CockroachDB, Redis, Redpanda, and Kong API routes.
+- `make urls` – Echo quick links to Keycloak, WSO2 API Manager, Jaeger, CockroachDB, Redis, and Redpanda.
 - `make smoke-test` – Run the comprehensive smoke test script (`./smoke-test.sh`).
 - `make workers` – Inspect the active task list for every Celery worker container.
 - `make test-worker-<svc>` – Dispatch a sample Celery task to a worker queue to verify connectivity.
@@ -165,18 +151,6 @@ Empty `.proto` placeholders are already present so you only need to populate the
 ├─ keycloak/
 │  ├─ Dockerfile
 │  └─ realm-export.json
-├─ kong/
-│  ├─ Dockerfile
-│  ├─ kong.yml
-│  └─ vendor/
-│     └─ openid-connect/
-│        ├─ LICENSE
-│        ├─ README.md
-│        ├─ filter.lua
-│        ├─ handler.lua
-│        ├─ schema.lua
-│        ├─ session.lua
-│        └─ utils.lua
 ├─ otel/
 │  ├─ Dockerfile
 │  └─ collector.yaml
@@ -263,7 +237,7 @@ Key directories at the repository root:
 - `services/` – Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding.
 - `protos/` – Versioned gRPC API definitions per domain.
 - `keycloak/` – Realm export and Dockerfile consumed during Keycloak startup.
-- `kong/` – Declarative Kong configuration with the vendored OpenID Connect plugin.
+- `wso2am` configuration – Managed through the WSO2 API Manager portals and persisted inside the container; export artifacts from the UI if you want to version them.
 - `otel/` – OpenTelemetry Collector pipeline.
 - `docker-compose.yml` – Orchestrates services, infrastructure, and bootstrap jobs.
 - `Makefile` – Convenience targets for the local workflow.

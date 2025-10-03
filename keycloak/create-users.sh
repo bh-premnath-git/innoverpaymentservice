@@ -124,18 +124,18 @@ create_user "user" "user" "user"
 echo "=========================================="
 echo "All users created/updated successfully!"
 
-# Configure Kong client for introspection
+# Configure WSO2 API Manager client for introspection
 echo ""
-echo "Configuring Kong client for introspection..."
-KONG_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=kong" \
+echo "Configuring WSO2 API Manager client for introspection..."
+WSO2_CLIENT_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=wso2am" \
     -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
 
-if [ -n "$KONG_ID" ]; then
-    curl -s -X PUT "http://localhost:8080/admin/realms/innover/clients/${KONG_ID}" \
+if [ -n "$WSO2_CLIENT_ID" ]; then
+    curl -s -X PUT "http://localhost:8080/admin/realms/innover/clients/${WSO2_CLIENT_ID}" \
         -H "Authorization: Bearer ${ADMIN_TOKEN}" \
         -H "Content-Type: application/json" \
         -d '{"serviceAccountsEnabled":true}'
-    echo "✓ Kong client configured"
+    echo "✓ WSO2 API Manager client configured"
 fi
 
 # Create postman-test client
@@ -160,7 +160,7 @@ if [ -z "$POSTMAN_EXISTS" ]; then
             "webOrigins": ["*"]
         }'
     
-    # Add kong audience mapper
+    # Add WSO2 API Manager audience mapper
     POSTMAN_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=postman-test" \
         -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
     
@@ -169,16 +169,16 @@ if [ -z "$POSTMAN_EXISTS" ]; then
             -H "Authorization: Bearer ${ADMIN_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{
-                "name": "kong-audience",
+                "name": "wso2am-audience",
                 "protocol": "openid-connect",
                 "protocolMapper": "oidc-audience-mapper",
                 "config": {
-                    "included.client.audience": "kong",
+                    "included.client.audience": "wso2am",
                     "id.token.claim": "false",
                     "access.token.claim": "true"
                 }
             }'
-        echo "✓ postman-test client created with kong audience"
+        echo "✓ postman-test client created with WSO2 API Manager audience"
     fi
 fi
 

@@ -1,6 +1,6 @@
 x-svc-env: &svc_env
   OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
-  OIDC_AUDIENCE: ${OIDC_AUDIENCE:-kong}
+  OIDC_AUDIENCE: ${OIDC_AUDIENCE:-wso2am}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secret}
 
@@ -132,34 +132,20 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
-  kong:
-    build: ./kong
+  wso2am:
+    image: wso2/wso2am:latest
     environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
-      KONG_PROXY_LISTEN: "0.0.0.0:8000"
-      KONG_ADMIN_LISTEN: "0.0.0.0:8001"
-      KONG_LOG_LEVEL: notice
-      KONG_PLUGINS: "bundled,openid-connect"
-      KONG_LUA_PACKAGE_PATH: "/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua;;"
-      KONG_OIDC_CLIENT_SECRET: ${KONG_OIDC_CLIENT_SECRET?KONG_OIDC_CLIENT_SECRET must be set}
-      KONG_SESSION_SECRET: ${KONG_SESSION_SECRET:-change-this-secret-key-min-32-chars}
-    volumes:
-      - ./kong/kong.yml:/kong/kong.yml:ro
+      JVM_MEM_OPTS: "-Xms512m -Xmx1024m"
     ports:
-      - "8000:8000"
-      - "8001:8001"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      keycloak:
-        condition: service_healthy
+      - "8280:8280"
+      - "9443:9443"
+    extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD", "kong", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      test: ["CMD-SHELL", "curl -k -fsS https://localhost:9443/services/Version >> /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
     deploy: *support_deploy
     restart: unless-stopped
 
