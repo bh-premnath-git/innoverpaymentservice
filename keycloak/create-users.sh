@@ -138,50 +138,6 @@ if [ -n "$KONG_ID" ]; then
     echo "✓ Kong client configured"
 fi
 
-# Create postman-test client
-echo "Creating postman-test client..."
-POSTMAN_EXISTS=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=postman-test" \
-    -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"clientId":"postman-test"')
-
-if [ -z "$POSTMAN_EXISTS" ]; then
-    curl -s -X POST "http://localhost:8080/admin/realms/innover/clients" \
-        -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d '{
-            "clientId": "postman-test",
-            "name": "API Testing Client",
-            "enabled": true,
-            "publicClient": false,
-            "secret": "postman-secret",
-            "directAccessGrantsEnabled": true,
-            "serviceAccountsEnabled": true,
-            "standardFlowEnabled": true,
-            "redirectUris": ["*"],
-            "webOrigins": ["*"]
-        }'
-    
-    # Add kong audience mapper
-    POSTMAN_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=postman-test" \
-        -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
-    
-    if [ -n "$POSTMAN_ID" ]; then
-        curl -s -X POST "http://localhost:8080/admin/realms/innover/clients/${POSTMAN_ID}/protocol-mappers/models" \
-            -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d '{
-                "name": "kong-audience",
-                "protocol": "openid-connect",
-                "protocolMapper": "oidc-audience-mapper",
-                "config": {
-                    "included.client.audience": "kong",
-                    "id.token.claim": "false",
-                    "access.token.claim": "true"
-                }
-            }'
-        echo "✓ postman-test client created with kong audience"
-    fi
-fi
-
 # Create apitest user
 echo "Creating apitest user..."
 create_user "apitest" "test123" ""
@@ -191,8 +147,4 @@ echo "=========================================="
 echo "Setup complete! You can log in with:"
 echo "  - admin/admin"
 echo "  - apitest/test123 (for API testing)"
-echo ""
-echo "API Testing:"
-echo "  Client: postman-test / postman-secret"
-echo "  Token URL: http://localhost/auth/realms/innover/protocol/openid-connect/token"
 echo "=========================================="
