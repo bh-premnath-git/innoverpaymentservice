@@ -1,68 +1,85 @@
 #!/usr/bin/env python3
-"""
-Configure Keycloak as an external Key Manager in WSO2 API Manager
-"""
+"""Automate wiring Keycloak as an external Key Manager in WSO2 API Manager."""
+
+import os
+import sys
+import time
+from typing import Dict, List, Optional
 
 import requests
-import json
-import sys
 from urllib3.exceptions import InsecureRequestWarning
 
-# Suppress SSL warnings
+# WSO2 ships with a self-signed management certificate. We deliberately ignore
+# verification when calling the Admin REST APIs to avoid local trust-store work.
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
+
+def load_env_file(path: str) -> Dict[str, str]:
+    """Best-effort parser for a .env file."""
+
+    values: Dict[str, str] = {}
+    if not os.path.exists(path):
+        return values
+
+    with open(path, "r", encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            values[key.strip()] = value.strip()
+    return values
+
+
 class WSO2KeyManagerConfigurator:
-    def __init__(self, wso2_host="https://localhost:9443", username="admin", password="admin"):
-        self.wso2_host = wso2_host
-        self.admin_api = f"{wso2_host}/api/am/admin/v4"
+    """Thin wrapper around the WSO2 Admin REST API for Key Manager tasks."""
+
+    def __init__(self, wso2_host: str, username: str, password: str) -> None:
+        self.wso2_host = wso2_host.rstrip("/")
+        self.admin_api = f"{self.wso2_host}/api/am/admin/v4"
         self.session = requests.Session()
         self.session.verify = False
         self.session.auth = (username, password)
         self.session.headers.update({"Content-Type": "application/json"})
 
-    def get_key_managers(self):
-        """List existing key managers"""
+    def get_key_managers(self) -> List[Dict[str, object]]:
         try:
             response = self.session.get(f"{self.admin_api}/key-managers")
-            if response.status_code == 200:
-                return response.json().get('list', [])
-            return []
-        except Exception as e:
-            print(f"❌ Error listing key managers: {str(e)}")
+            response.raise_for_status()
+            return response.json().get("list", [])
+        except Exception as exc:  # pragma: no cover - runtime aid
+            print(f"❌ Error listing key managers: {exc}")
             return []
 
-    def check_keycloak_exists(self):
-        """Check if Keycloak key manager already exists"""
-        key_managers = self.get_key_managers()
-        for km in key_managers:
-            if 'keycloak' in km.get('name', '').lower():
+    def check_keycloak_exists(self) -> Optional[Dict[str, object]]:
+        for km in self.get_key_managers():
+            name = km.get("name", "").lower()
+            if "keycloak" in name:
                 return km
         return None
 
-    def configure_keycloak_key_manager(self, keycloak_config):
-        """Configure Keycloak as an external Key Manager"""
-        
-        payload = {
+    def _payload(self, config: Dict[str, str]) -> Dict[str, object]:
+        return {
             "name": "Keycloak",
             "type": "Keycloak",
             "displayName": "Keycloak",
-            "description": "Keycloak OpenID Connect Key Manager for innover realm",
+            "description": "Keycloak OpenID Connect Key Manager for the innover realm",
             "enabled": True,
-            "introspectionEndpoint": keycloak_config["introspection_endpoint"],
-            "tokenEndpoint": keycloak_config["token_endpoint"],
-            "revokeEndpoint": keycloak_config["revoke_endpoint"],
-            "userInfoEndpoint": keycloak_config["userinfo_endpoint"],
-            "authorizeEndpoint": keycloak_config["authorize_endpoint"],
+            "introspectionEndpoint": config["introspection_endpoint"],
+            "tokenEndpoint": config["token_endpoint"],
+            "revokeEndpoint": config["revoke_endpoint"],
+            "userInfoEndpoint": config["userinfo_endpoint"],
+            "authorizeEndpoint": config["authorize_endpoint"],
             "certificates": {
                 "type": "JWKS",
-                "value": keycloak_config["jwks_endpoint"]
+                "value": config["jwks_endpoint"],
             },
-            "issuer": keycloak_config["server_url"],
+            "issuer": config["issuer"],
             "availableGrantTypes": [
                 "authorization_code",
                 "password",
                 "client_credentials",
-                "refresh_token"
+                "refresh_token",
             ],
             "enableTokenGeneration": True,
             "enableTokenEncryption": False,
@@ -73,227 +90,172 @@ class WSO2KeyManagerConfigurator:
             "claimMapping": [
                 {
                     "remoteClaim": "sub",
-                    "localClaim": "http://wso2.org/claims/enduser"
+                    "localClaim": "http://wso2.org/claims/enduser",
                 },
                 {
                     "remoteClaim": "email",
-                    "localClaim": "http://wso2.org/claims/emailaddress"
+                    "localClaim": "http://wso2.org/claims/emailaddress",
                 },
                 {
                     "remoteClaim": "given_name",
-                    "localClaim": "http://wso2.org/claims/givenname"
+                    "localClaim": "http://wso2.org/claims/givenname",
                 },
                 {
                     "remoteClaim": "family_name",
-                    "localClaim": "http://wso2.org/claims/lastname"
+                    "localClaim": "http://wso2.org/claims/lastname",
                 },
                 {
                     "remoteClaim": "preferred_username",
-                    "localClaim": "http://wso2.org/claims/username"
-                }
+                    "localClaim": "http://wso2.org/claims/username",
+                },
             ],
             "consumerKeyClaim": "azp",
             "scopesClaim": "scope",
-            "tokenType": "JWT",
-            "additionalProperties": {
-                "client_id": keycloak_config["client_id"],
-                "client_secret": keycloak_config["client_secret"],
-                "Username": keycloak_config["client_id"],
-                "Password": keycloak_config["client_secret"]
-            }
-        }
-
-        try:
-            response = self.session.post(f"{self.admin_api}/key-managers", json=payload)
-            if response.status_code in [200, 201]:
-                print(f"✅ Keycloak Key Manager configured successfully!")
-                return response.json()
-            else:
-                print(f"❌ Failed to configure Keycloak: {response.status_code}")
-                print(f"   Response: {response.text}")
-                return None
-        except Exception as e:
-            print(f"❌ Error configuring Keycloak: {str(e)}")
-            return None
-
-    def update_keycloak_key_manager(self, km_id, keycloak_config):
-        """Update existing Keycloak key manager"""
-        payload = {
-            "name": "Keycloak",
-            "type": "Keycloak",
-            "displayName": "Keycloak",
-            "description": "Keycloak OpenID Connect Key Manager for innover realm",
-            "enabled": True,
-            "introspectionEndpoint": keycloak_config["introspection_endpoint"],
-            "tokenEndpoint": keycloak_config["token_endpoint"],
-            "revokeEndpoint": keycloak_config["revoke_endpoint"],
-            "userInfoEndpoint": keycloak_config["userinfo_endpoint"],
-            "authorizeEndpoint": keycloak_config["authorize_endpoint"],
-            "certificates": {
-                "type": "JWKS",
-                "value": keycloak_config["jwks_endpoint"]
-            },
-            "issuer": keycloak_config["server_url"],
-            "availableGrantTypes": [
-                "authorization_code",
-                "password",
-                "client_credentials",
-                "refresh_token"
-            ],
-            "enableTokenGeneration": True,
-            "enableTokenEncryption": False,
-            "enableTokenHashing": False,
-            "enableMapOAuthConsumerApps": False,
-            "enableOAuthAppCreation": False,
-            "enableSelfValidationJWT": True,
-            "claimMapping": [
-                {
-                    "remoteClaim": "sub",
-                    "localClaim": "http://wso2.org/claims/enduser"
-                },
-                {
-                    "remoteClaim": "email",
-                    "localClaim": "http://wso2.org/claims/emailaddress"
-                },
-                {
-                    "remoteClaim": "given_name",
-                    "localClaim": "http://wso2.org/claims/givenname"
-                },
-                {
-                    "remoteClaim": "family_name",
-                    "localClaim": "http://wso2.org/claims/lastname"
-                },
-                {
-                    "remoteClaim": "preferred_username",
-                    "localClaim": "http://wso2.org/claims/username"
-                }
-            ],
-            "consumerKeyClaim": "azp",
-            "scopesClaim": "scope",
+            # Tokens issued by Keycloak are exchanged at the Gateway.
             "tokenType": "EXCHANGED",
             "additionalProperties": {
-                "client_id": keycloak_config["client_id"],
-                "client_secret": keycloak_config["client_secret"],
-                "Username": keycloak_config["client_id"],
-                "Password": keycloak_config["client_secret"]
-            }
+                "client_id": config["client_id"],
+                "client_secret": config["client_secret"],
+                "Username": config["client_id"],
+                "Password": config["client_secret"],
+            },
         }
 
+    def configure(self, config: Dict[str, str]) -> Optional[Dict[str, object]]:
+        payload = self._payload(config)
+        try:
+            response = self.session.post(f"{self.admin_api}/key-managers", json=payload)
+            if response.status_code in (200, 201):
+                print("✅ Keycloak Key Manager configured successfully!")
+                return response.json()
+            print(f"❌ Failed to configure Keycloak: {response.status_code}\n   {response.text}")
+        except Exception as exc:  # pragma: no cover - runtime aid
+            print(f"❌ Error configuring Keycloak: {exc}")
+        return None
+
+    def update(self, km_id: str, config: Dict[str, str]) -> Optional[Dict[str, object]]:
+        payload = self._payload(config)
         try:
             response = self.session.put(f"{self.admin_api}/key-managers/{km_id}", json=payload)
             if response.status_code == 200:
-                print(f"✅ Keycloak Key Manager updated successfully!")
+                print("✅ Keycloak Key Manager updated successfully!")
                 return response.json()
-            else:
-                print(f"❌ Failed to update Keycloak: {response.status_code}")
-                print(f"   Response: {response.text}")
-                return None
-        except Exception as e:
-            print(f"❌ Error updating Keycloak: {str(e)}")
-            return None
+            print(f"❌ Failed to update Keycloak: {response.status_code}\n   {response.text}")
+        except Exception as exc:  # pragma: no cover - runtime aid
+            print(f"❌ Error updating Keycloak: {exc}")
+        return None
 
 
-def get_keycloak_config():
-    """Get Keycloak configuration from environment or defaults"""
-    import os
-    
-    # Read from .env file if available
-    env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
-    client_secret = "wso2am-secret"  # default
-    
-    if os.path.exists(env_file):
-        with open(env_file, 'r') as f:
-            for line in f:
-                if line.startswith('WSO2_AM_CLIENT_SECRET='):
-                    client_secret = line.split('=', 1)[1].strip()
-                    break
-    
-    # Use internal Docker network hostname
-    keycloak_base = "http://keycloak:8080/realms/innover"
-    
+def get_keycloak_config() -> Dict[str, str]:
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    env_from_file = load_env_file(os.path.join(repo_root, ".env"))
+
+    client_id = os.getenv("WSO2_AM_CLIENT_ID", env_from_file.get("WSO2_AM_CLIENT_ID", "wso2am"))
+    client_secret = os.getenv(
+        "WSO2_AM_CLIENT_SECRET",
+        env_from_file.get("WSO2_AM_CLIENT_SECRET", "wso2am-secret"),
+    )
+
+    internal_realm = os.getenv(
+        "KEYCLOAK_INTERNAL_REALM_URL",
+        env_from_file.get("KEYCLOAK_INTERNAL_REALM_URL", "http://keycloak:8080/realms/innover"),
+    ).rstrip("/")
+    issuer = os.getenv(
+        "KEYCLOAK_ISSUER",
+        env_from_file.get("KEYCLOAK_ISSUER", internal_realm),
+    ).rstrip("/")
+
     return {
-        "server_url": keycloak_base,
-        "client_id": "wso2am",
+        "client_id": client_id,
         "client_secret": client_secret,
-        "introspection_endpoint": f"{keycloak_base}/protocol/openid-connect/token/introspect",
-        "token_endpoint": f"{keycloak_base}/protocol/openid-connect/token",
-        "revoke_endpoint": f"{keycloak_base}/protocol/openid-connect/revoke",
-        "userinfo_endpoint": f"{keycloak_base}/protocol/openid-connect/userinfo",
-        "authorize_endpoint": f"{keycloak_base}/protocol/openid-connect/auth",
-        "jwks_endpoint": f"{keycloak_base}/protocol/openid-connect/certs",
-        "well_known": f"{keycloak_base}/.well-known/openid-configuration"
+        "issuer": issuer,
+        "introspection_endpoint": f"{internal_realm}/protocol/openid-connect/token/introspect",
+        "token_endpoint": f"{internal_realm}/protocol/openid-connect/token",
+        "revoke_endpoint": f"{internal_realm}/protocol/openid-connect/revoke",
+        "userinfo_endpoint": f"{internal_realm}/protocol/openid-connect/userinfo",
+        "authorize_endpoint": f"{internal_realm}/protocol/openid-connect/auth",
+        "jwks_endpoint": f"{internal_realm}/protocol/openid-connect/certs",
+        "well_known": f"{issuer}/.well-known/openid-configuration",
     }
 
 
-def main():
+def wait_for_service(name: str, url: str, verify: bool = False, retries: int = 40, delay: int = 6) -> bool:
+    for attempt in range(1, retries + 1):
+        try:
+            response = requests.get(url, verify=verify, timeout=10)
+            if response.status_code < 500:
+                print(f"✅ {name} is accessible (attempt {attempt}/{retries})")
+                return True
+            print(f"⚠️  {name} responded with {response.status_code} (attempt {attempt}/{retries}); retrying...")
+        except Exception as exc:  # pragma: no cover - runtime aid
+            print(f"⚠️  {name} not ready ({exc}) (attempt {attempt}/{retries}); retrying...")
+        time.sleep(delay)
+    print(f"❌ {name} did not become ready after {retries} attempts")
+    return False
+
+
+def main() -> None:
     print("=" * 70)
     print("WSO2 API Manager - Keycloak Integration")
     print("=" * 70)
-    
-    # Check Keycloak availability
+
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    env_from_file = load_env_file(os.path.join(repo_root, ".env"))
+
+    wso2_host = os.getenv("WSO2_HOST", env_from_file.get("WSO2_HOST", "https://localhost:9443")).rstrip("/")
+    admin_user = os.getenv("WSO2_ADMIN_USERNAME", env_from_file.get("WSO2_ADMIN_USERNAME", "admin"))
+    admin_pass = os.getenv("WSO2_ADMIN_PASSWORD", env_from_file.get("WSO2_ADMIN_PASSWORD", "admin"))
+
+    keycloak_public = os.getenv(
+        "KEYCLOAK_PUBLIC_REALM_URL",
+        env_from_file.get("KEYCLOAK_PUBLIC_REALM_URL", "http://localhost:8080/realms/innover"),
+    ).rstrip("/")
+
     print("\n🔄 Checking Keycloak availability...")
-    try:
-        response = requests.get("http://localhost:8080/realms/innover/.well-known/openid-configuration", timeout=5)
-        if response.status_code == 200:
-            print("✅ Keycloak is accessible")
-        else:
-            print("❌ Keycloak is not responding properly")
-            sys.exit(1)
-    except Exception as e:
-        print(f"❌ Cannot reach Keycloak: {str(e)}")
+    if not wait_for_service("Keycloak", f"{keycloak_public}/.well-known/openid-configuration"):
         sys.exit(1)
-    
-    # Check WSO2 availability
+
     print("🔄 Checking WSO2 API Manager availability...")
-    try:
-        response = requests.get("https://localhost:9443/services/Version", verify=False, timeout=5)
-        if response.status_code == 200:
-            print("✅ WSO2 API Manager is accessible")
-        else:
-            print("❌ WSO2 is not responding properly")
-            sys.exit(1)
-    except Exception as e:
-        print(f"❌ Cannot reach WSO2: {str(e)}")
+    if not wait_for_service("WSO2 API Manager", f"{wso2_host}/services/Version"):
         sys.exit(1)
-    
-    # Get Keycloak configuration
+
     keycloak_config = get_keycloak_config()
-    print(f"\n📋 Keycloak Configuration:")
-    print(f"   Server: {keycloak_config['server_url']}")
+    print("\n📋 Keycloak Configuration:")
+    print(f"   Issuer: {keycloak_config['issuer']}")
     print(f"   Client ID: {keycloak_config['client_id']}")
     print(f"   Client Secret: {'*' * len(keycloak_config['client_secret'])}")
-    
-    # Configure WSO2
-    configurator = WSO2KeyManagerConfigurator()
-    
+
+    configurator = WSO2KeyManagerConfigurator(wso2_host=wso2_host, username=admin_user, password=admin_pass)
+
     print("\n🔄 Checking existing Key Managers...")
     existing_km = configurator.check_keycloak_exists()
-    
+
     if existing_km:
         print(f"⚠️  Keycloak Key Manager already exists (ID: {existing_km['id']})")
-        print("   Updating configuration...")
-        result = configurator.update_keycloak_key_manager(existing_km['id'], keycloak_config)
+        result = configurator.update(existing_km["id"], keycloak_config)
     else:
         print("📝 Creating new Keycloak Key Manager...")
-        result = configurator.configure_keycloak_key_manager(keycloak_config)
-    
-    if result:
-        print("\n" + "=" * 70)
-        print("✅ Keycloak Integration Complete!")
-        print("=" * 70)
-        print("\n📊 Current Key Managers:")
-        key_managers = configurator.get_key_managers()
-        for km in key_managers:
-            status = "✅" if km.get('enabled') else "❌"
-            print(f"{status} {km.get('name')} ({km.get('type')})")
-        
-        print("\n💡 Next Steps:")
-        print("1. Go to WSO2 Publisher: https://localhost:9443/publisher")
-        print("2. Edit an API and update its Key Manager to 'Keycloak'")
-        print("3. Test token generation with Keycloak credentials")
-    else:
+        result = configurator.configure(keycloak_config)
+
+    if not result:
         print("\n❌ Failed to configure Keycloak integration")
         sys.exit(1)
+
+    print("\n" + "=" * 70)
+    print("✅ Keycloak Integration Complete!")
+    print("=" * 70)
+
+    key_managers = configurator.get_key_managers()
+    if key_managers:
+        print("\n📊 Current Key Managers:")
+        for km in key_managers:
+            status = "✅" if km.get("enabled") else "❌"
+            print(f"{status} {km.get('name')} ({km.get('type')})")
+
+    print("\n💡 Next Steps:")
+    print("1. Visit the WSO2 Publisher: https://localhost:9443/publisher")
+    print("2. Select an API and enable the 'Keycloak' key manager")
+    print("3. Generate tokens using Keycloak credentials")
 
 
 if __name__ == "__main__":

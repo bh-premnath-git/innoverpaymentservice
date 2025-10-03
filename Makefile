@@ -5,6 +5,7 @@ SHELL := /bin/bash
 # Start all services
 up:
 	docker compose up -d --build
+	$(MAKE) configure-keycloak
 
 # Rebuild without cache
 rebuild:
