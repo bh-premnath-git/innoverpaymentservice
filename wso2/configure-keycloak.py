@@ -42,6 +42,53 @@ class WSO2KeyManagerConfigurator:
         self.session.auth = (username, password)
         self.session.headers.update({"Content-Type": "application/json"})
 
+    def discover_connector_type(self, preferred: str = "Keycloak") -> Dict[str, object]:
+        """Return discovery details for available Key Manager connector types."""
+
+        endpoints = [
+            f"{self.admin_api}/settings",
+        ]
+
+        for endpoint in endpoints:
+            try:
+                response = self.session.get(endpoint)
+                if response.status_code != 200:
+                    continue
+                settings = response.json()
+                connectors = settings.get("keyManagerConfiguration", [])
+                if not connectors:
+                    continue
+
+                def _match(candidate: Dict[str, object]) -> bool:
+                    type_value = str(candidate.get("type", ""))
+                    display = str(candidate.get("displayName", ""))
+                    if preferred and type_value.lower() == preferred.lower():
+                        return True
+                    if preferred and display.lower() == preferred.lower():
+                        return True
+                    if preferred and preferred.lower() in display.lower():
+                        return True
+                    return False
+
+                for connector in connectors:
+                    if _match(connector):
+                        return {
+                            "type": str(connector.get("type")),
+                            "matched": True,
+                            "available": connectors,
+                        }
+
+                if connectors:
+                    return {
+                        "type": str(connectors[0].get("type")),
+                        "matched": False,
+                        "available": connectors,
+                    }
+            except Exception as exc:  # pragma: no cover - runtime aid
+                print(f"⚠️  Unable to discover connector types from {endpoint}: {exc}")
+
+        return {"type": None, "matched": False, "available": []}
+
     def get_key_managers(self) -> List[Dict[str, object]]:
         try:
             response = self.session.get(f"{self.admin_api}/key-managers")
@@ -69,13 +116,14 @@ class WSO2KeyManagerConfigurator:
             print(f"⚠️  Error deleting Key Manager: {exc}")
         return False
 
-    def _payload(self, config: Dict[str, str]) -> Dict[str, object]:
+    def _payload(self, config: Dict[str, str], connector_type: str) -> Dict[str, object]:
         return {
             "name": "Keycloak",
-            "type": "Keycloak",
+            "type": connector_type,
             "displayName": "Keycloak",
             "description": "Keycloak OpenID Connect Key Manager for the innover realm",
             "enabled": True,
+            "wellKnownEndpoint": config.get("well_known"),
             "introspectionEndpoint": config["introspection_endpoint"],
             "tokenEndpoint": config["token_endpoint"],
             "revokeEndpoint": config["revoke_endpoint"],
@@ -133,7 +181,8 @@ class WSO2KeyManagerConfigurator:
         }
 
     def configure(self, config: Dict[str, str]) -> Optional[Dict[str, object]]:
-        payload = self._payload(config)
+        connector_type = config.get("connector_type", "Keycloak")
+        payload = self._payload(config, connector_type)
         try:
             response = self.session.post(f"{self.admin_api}/key-managers", json=payload)
             if response.status_code in (200, 201):
@@ -145,7 +194,8 @@ class WSO2KeyManagerConfigurator:
         return None
 
     def update(self, km_id: str, config: Dict[str, str]) -> Optional[Dict[str, object]]:
-        payload = self._payload(config)
+        connector_type = config.get("connector_type", "Keycloak")
+        payload = self._payload(config, connector_type)
         try:
             response = self.session.put(f"{self.admin_api}/key-managers/{km_id}", json=payload)
             if response.status_code == 200:
@@ -187,9 +237,13 @@ def get_keycloak_config() -> Dict[str, str]:
         "KEYCLOAK_ISSUER",
         env_from_file.get("KEYCLOAK_ISSUER", internal_realm),
     ).rstrip("/")
+    connector_type_hint = os.getenv(
+        "KEYCLOAK_CONNECTOR_TYPE",
+        env_from_file.get("KEYCLOAK_CONNECTOR_TYPE", "Keycloak"),
+    )
 
     well_known_url = f"{internal_realm}/.well-known/openid-configuration"
-    
+
     # Try to fetch from .well-known endpoint
     print(f"📡 Fetching configuration from: {well_known_url}")
     well_known = fetch_well_known_config(well_known_url)
@@ -207,6 +261,7 @@ def get_keycloak_config() -> Dict[str, str]:
             "authorize_endpoint": well_known.get("authorization_endpoint", f"{internal_realm}/protocol/openid-connect/auth"),
             "jwks_endpoint": well_known.get("jwks_uri", f"{internal_realm}/protocol/openid-connect/certs"),
             "well_known": well_known_url,
+            "connector_type_hint": connector_type_hint,
         }
     else:
         # Fallback to manual construction
@@ -222,6 +277,7 @@ def get_keycloak_config() -> Dict[str, str]:
             "authorize_endpoint": f"{internal_realm}/protocol/openid-connect/auth",
             "jwks_endpoint": f"{internal_realm}/protocol/openid-connect/certs",
             "well_known": well_known_url,
+            "connector_type_hint": connector_type_hint,
         }
 
 
@@ -272,6 +328,26 @@ def main() -> None:
     print(f"   Client Secret: {'*' * len(keycloak_config['client_secret'])}")
 
     configurator = WSO2KeyManagerConfigurator(wso2_host=wso2_host, username=admin_user, password=admin_pass)
+
+    discovery = configurator.discover_connector_type(
+        keycloak_config.get("connector_type_hint", "Keycloak")
+    )
+    connector_type = discovery.get("type")
+    if not connector_type:
+        print("\n❌ Unable to determine a valid Key Manager connector type from WSO2 settings")
+        print("   Please ensure the Keycloak connector is installed and try again.")
+        sys.exit(1)
+
+    keycloak_config["connector_type"] = connector_type
+    print(f"   Connector Type: {connector_type}")
+    if not discovery.get("matched", False):
+        print("   ⚠️  Preferred connector type not found; using first available option")
+        available = ", ".join(
+            str(conn.get("displayName") or conn.get("type"))
+            for conn in discovery.get("available", [])
+        )
+        if available:
+            print(f"   Available connector types reported by WSO2: {available}")
 
     print("\n🔄 Checking existing Key Managers...")
     existing_km = configurator.check_keycloak_exists()
