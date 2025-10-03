@@ -71,14 +71,16 @@ The identity layer is prewired so that local OAuth/OIDC flows work out of the bo
 
 - `keycloak/realm-export.json` defines the `innover` realm, role taxonomy, and a confidential `wso2am` client used when wiring WSO2 API Manager to Keycloak. Keep the `secret` field for that client in lock-step with the `WSO2_AM_CLIENT_SECRET` value in `.env` so token introspection works as expected.
 - The realm also bundles two browser authentication flows (default and OTP-enforced) to illustrate step-up scenarios, giving you a head start on multi-factor experiments. The shipped export restricts redirect and post-logout URIs to `https://localhost:9443/*`, so add extra origins in the realm if you proxy WSO2 somewhere else.
-- WSO2 API Manager starts with the stock configuration from the upstream image. Use the Publisher portal to create APIs that target the internal services (for example `http://ledger:8000`) and secure them with Keycloak by importing the realm metadata (`http://keycloak:8080/realms/innover/.well-known/openid-configuration`).
+- WSO2 API Manager is auto-wired to Keycloak by the `wso2/configure-keycloak.py` helper that runs as part of `make up`. The script waits for both services to report healthy and then provisions the Keycloak connector through the Admin REST API, eliminating the need to click through the management console.
 
 ### Keycloak + WSO2 API Manager checklist
-1. Start the stack (`make up`) and wait for Keycloak (`http://localhost:8080`) and WSO2 API Manager (`https://localhost:9443/carbon`) to report healthy.
+1. Start the stack (`make up`). The Makefile will block until Keycloak (`http://localhost:8080`) and WSO2 API Manager (`https://localhost:9443/carbon`) are healthy and the Keycloak key manager has been created automatically.
 2. Sign in to the Keycloak admin console (`http://localhost:8080/admin`) with the bootstrap credentials declared in `docker-compose.yml`, then create a user with a password and mark it as verified/enabled.
-3. Log in to the WSO2 management console with the default `admin/admin` credentials and configure an OAuth2/OpenID Connect identity provider that points at the Keycloak issuer (`http://keycloak:8080/realms/innover`). Use the `wso2am` client credentials from `.env` when WSO2 prompts for the client ID and secret.
+3. (Optional) Log in to the WSO2 management console with the default `admin/admin` credentials if you want to inspect or tweak the generated Keycloak key manager. The configuration is driven by the `WSO2_AM_CLIENT_*` and `KEYCLOAK_*` variables in `.env`.
 4. Publish an API in WSO2 that targets one of the internal services (for example `http://ledger:8000/health`) and enable OAuth2 security using the Keycloak connection.
 5. Invoke the API through the WSO2 gateway via the developer portal or `curl`, using the HTTPS endpoint on port 9443 (or HTTP on 8280) that corresponds to the context you published.
+
+Need to re-run the wiring after changing credentials? Execute `make configure-keycloak` to trigger the same automation without restarting the full stack.
 
 ### Automated API Publishing
 The repository includes automation scripts to publish all microservices to WSO2 API Manager with support for REST, GraphQL, WebSocket, and AI/LLM APIs:
