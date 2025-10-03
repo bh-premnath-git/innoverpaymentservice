@@ -1,0 +1,135 @@
+# WSO2 API Configuration File
+# This file defines all APIs to be published to WSO2 API Manager
+# Supports: REST, GraphQL, WebSocket, and AI/LLM APIs
+
+# Current Microservices (REST APIs)
+rest_apis:
+  - name: "Profile Service API"
+    context: "/api/profile"
+    version: "1.0.0"
+    backend_url: "http://profile:8000"
+    description: "User profile management and orchestration"
+    tags: ["profile", "user", "microservice"]
+    
+  - name: "Payment Service API"
+    context: "/api/payment"
+    version: "1.0.0"
+    backend_url: "http://payment:8000"
+    description: "Payment initiation and processing pipeline"
+    tags: ["payment", "transaction", "microservice"]
+    
+  - name: "Ledger Service API"
+    context: "/api/ledger"
+    version: "1.0.0"
+    backend_url: "http://ledger:8000"
+    description: "Financial ledger and accounting operations"
+    tags: ["ledger", "accounting", "microservice"]
+    
+  - name: "Wallet Service API"
+    context: "/api/wallet"
+    version: "1.0.0"
+    backend_url: "http://wallet:8000"
+    description: "Customer wallet and balance management"
+    tags: ["wallet", "balance", "microservice"]
+    
+  - name: "Rule Engine Service API"
+    context: "/api/rules"
+    version: "1.0.0"
+    backend_url: "http://rule-engine:8000"
+    description: "Business rules and decision engine"
+    tags: ["rules", "decision", "microservice"]
+    
+  - name: "Forex Service API"
+    context: "/api/forex"
+    version: "1.0.0"
+    backend_url: "http://forex:8000"
+    description: "Foreign exchange rates and currency conversion"
+    tags: ["forex", "currency", "microservice"]
+
+# GraphQL APIs (add when ready)
+graphql_apis:
+  # Example GraphQL API configuration
+  # - name: "Profile GraphQL API"
+  #   context: "/graphql/profile"
+  #   version: "1.0.0"
+  #   backend_url: "http://profile:8000/graphql"
+  #   description: "GraphQL interface for profile queries and mutations"
+  #   tags: ["graphql", "profile"]
+  #   schema: |
+  #     type Query {
+  #       user(id: ID!): User
+  #       users: [User]
+  #     }
+  #     type User {
+  #       id: ID!
+  #       name: String!
+  #       email: String!
+  #     }
+
+# WebSocket/Streaming APIs (add when ready)
+websocket_apis:
+  # Example WebSocket API configuration
+  # - name: "Payment Events Stream"
+  #   context: "/stream/payments"
+  #   version: "1.0.0"
+  #   backend_url: "ws://payment:8000/ws"
+  #   description: "Real-time payment event streaming"
+  #   tags: ["websocket", "streaming", "events", "realtime"]
+  
+  # - name: "Transaction Monitor Stream"
+  #   context: "/stream/transactions"
+  #   version: "1.0.0"
+  #   backend_url: "ws://ledger:8000/ws/transactions"
+  #   description: "Live transaction monitoring and updates"
+  #   tags: ["websocket", "streaming", "transactions"]
+
+# AI/LLM APIs (add when ready)
+llm_apis:
+  # Example AI/LLM API configuration
+  # - name: "AI Assistant API"
+  #   context: "/api/ai/assistant"
+  #   version: "1.0.0"
+  #   backend_url: "http://ai-service:8000"
+  #   description: "AI-powered assistant for financial queries"
+  #   timeout: 300000  # 5 minutes for LLM processing
+  #   tags: ["ai", "llm", "assistant", "chatbot"]
+  #   operations:
+  #     - target: "/chat"
+  #       verb: "POST"
+  #       description: "Chat completion endpoint"
+  #     - target: "/completions"
+  #       verb: "POST"
+  #       description: "Text completion endpoint"
+  #     - target: "/embeddings"
+  #       verb: "POST"
+  #       description: "Generate embeddings"
+  
+  # - name: "Fraud Detection AI API"
+  #   context: "/api/ai/fraud"
+  #   version: "1.0.0"
+  #   backend_url: "http://ml-fraud:8000"
+  #   description: "ML-based fraud detection and risk scoring"
+  #   timeout: 60000  # 1 minute
+  #   tags: ["ai", "ml", "fraud", "risk"]
+
+# Global API Settings
+global_settings:
+  visibility: "PUBLIC"  # PUBLIC, PRIVATE, RESTRICTED
+  security_schemes: ["oauth2", "oauth_basic_auth_api_key_mandatory"]
+  throttling_policies: ["Unlimited", "Gold", "Silver", "Bronze"]
+  gateway_environments: ["Production and Sandbox"]
+  transport: ["http", "https"]
+  
+  # CORS Configuration
+  cors:
+    enabled: true
+    allow_origins: ["*"]
+    allow_credentials: false
+    allow_headers: ["authorization", "Access-Control-Allow-Origin", "Content-Type", "SOAPAction", "X-API-Key"]
+    allow_methods: ["GET", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"]
+  
+  # Default endpoint configuration
+  endpoint_config:
+    timeout: 30000  # 30 seconds default
+    retry_count: 3
+    retry_delay: 1000  # 1 second

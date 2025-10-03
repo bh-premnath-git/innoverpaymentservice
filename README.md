@@ -80,6 +80,51 @@ The identity layer is prewired so that local OAuth/OIDC flows work out of the bo
 4. Publish an API in WSO2 that targets one of the internal services (for example `http://ledger:8000/health`) and enable OAuth2 security using the Keycloak connection.
 5. Invoke the API through the WSO2 gateway via the developer portal or `curl`, using the HTTPS endpoint on port 9443 (or HTTP on 8280) that corresponds to the context you published.
 
+### Automated API Publishing
+The repository includes automation scripts to publish all microservices to WSO2 API Manager with support for REST, GraphQL, WebSocket, and AI/LLM APIs:
+
+1. **Quick publish** - Publish all configured APIs:
+   ```bash
+   make publish-apis
+   ```
+
+   This will automatically publish all 6 microservices to WSO2:
+   - Profile Service API → `/api/profile` → `http://profile:8000`
+   - Payment Service API → `/api/payment` → `http://payment:8000`
+   - Ledger Service API → `/api/ledger` → `http://ledger:8000`
+   - Wallet Service API → `/api/wallet` → `http://wallet:8000`
+   - Rule Engine Service API → `/api/rules` → `http://rule-engine:8000`
+   - Forex Service API → `/api/forex` → `http://forex:8000`
+
+2. **Configuration-based approach** - Edit `wso2/api-config.yaml` to define your APIs:
+   - REST APIs: Standard HTTP/HTTPS endpoints
+   - GraphQL APIs: GraphQL schema and endpoint
+   - WebSocket APIs: Real-time streaming endpoints
+   - AI/LLM APIs: High-timeout endpoints for AI/ML services
+
+3. **Manual scripting** - Use `wso2/wso2-api-publisher.py` for programmatic API creation with custom logic
+
+The automation handles:
+- API creation with proper endpoint configuration
+- Security scheme setup (OAuth2, API Key)
+- CORS configuration
+- Lifecycle management (auto-publish to PUBLISHED state)
+- Support for future GraphQL, WebSocket, and AI/LLM endpoints
+
+**What WSO2 knows after publishing:**
+- All backend service URLs and health endpoints
+- API contexts, versions, and descriptions
+- Security schemes (OAuth2, API Key)
+- CORS settings for cross-origin requests
+- All HTTP methods (GET, POST, PUT, DELETE, PATCH)
+- Throttling policies and visibility settings
+
+**Accessing published APIs:**
+- **Publisher Portal**: https://localhost:9443/publisher (manage and configure APIs)
+- **Developer Portal**: https://localhost:9443/devportal (discover and subscribe to APIs)
+- **API Gateway**: `https://localhost:9443/<context>` or `http://localhost:8280/<context>`
+  - Example: `https://localhost:9443/api/profile/health`
+
 ### WSO2 integration tips
 - Import the Keycloak JWKS endpoint (`http://keycloak:8080/realms/innover/protocol/openid-connect/certs`) so WSO2 can validate issued tokens without manual key rotation.
 - The official WSO2 API Manager Docker samples at <https://github.com/wso2/docker-apim> illustrate how to script API publication and customizations. They are a good starting point for automating gateway configuration inside this stack.
@@ -126,6 +171,7 @@ make up
 - `make db-shell` – Open an interactive CockroachDB SQL shell inside the `cockroach1` container.
 - `make redis-cli` – Launch the Redis CLI authenticated with the configured password.
 - `make kafka-topics` – List Redpanda (Kafka) topics through `rpk`.
+- `make publish-apis` – Automatically publish all APIs to WSO2 API Manager from `wso2/api-config.yaml`.
 
 If you need direct access to a service container, use `docker compose exec <service> bash` and note that each heartbeat script runs in the foreground printing `[tick n] alive` messages.
 
@@ -237,7 +283,7 @@ Key directories at the repository root:
 - `services/` – Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding.
 - `protos/` – Versioned gRPC API definitions per domain.
 - `keycloak/` – Realm export and Dockerfile consumed during Keycloak startup.
-- `wso2am` configuration – Managed through the WSO2 API Manager portals and persisted inside the container; export artifacts from the UI if you want to version them.
+- `wso2/` – WSO2 API Manager automation scripts and API configuration (REST, GraphQL, WebSocket, AI/LLM).
 - `otel/` – OpenTelemetry Collector pipeline.
 - `docker-compose.yml` – Orchestrates services, infrastructure, and bootstrap jobs.
 - `Makefile` – Convenience targets for the local workflow.

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: up down rebuild logs ps proto urls smoke-test nuke restart health workers
+.PHONY: up down rebuild logs ps proto urls smoke-test nuke restart health workers publish-apis
 
 # Start all services
 up:
@@ -87,6 +87,18 @@ redis-cli:
 kafka-topics:
 	docker compose exec redpanda rpk topic list --brokers redpanda:9092
 
+# Publish APIs to WSO2 API Manager
+publish-apis:
+	@echo "=== Publishing APIs to WSO2 API Manager ==="
+	@pip install -q requests pyyaml 2>/dev/null || echo "Installing dependencies..."
+	@python3 wso2/wso2-publisher-from-config.py
+
+# Configure Keycloak integration with WSO2
+configure-keycloak:
+	@echo "=== Configuring Keycloak Integration with WSO2 ==="
+	@pip install -q requests 2>/dev/null || echo "Installing dependencies..."
+	@python3 wso2/configure-keycloak.py
+
 # Help
 help:
 	@echo "Available targets:"
@@ -107,4 +119,6 @@ help:
 	@echo "  make db-shell        - Open CockroachDB SQL shell"
 	@echo "  make redis-cli       - Open Redis CLI"
 	@echo "  make kafka-topics    - List Kafka topics"
+	@echo "  make publish-apis    - Publish all APIs to WSO2 API Manager"
+	@echo "  make configure-keycloak - Configure Keycloak as Key Manager in WSO2"
 
