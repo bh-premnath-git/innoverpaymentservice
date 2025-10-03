@@ -146,6 +146,18 @@ class WSO2KeyManagerConfigurator:
         return None
 
 
+def fetch_well_known_config(well_known_url: str) -> Optional[Dict[str, str]]:
+    """Fetch OpenID Connect configuration from .well-known endpoint"""
+    try:
+        response = requests.get(well_known_url, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+        print(f"⚠️  Failed to fetch .well-known config: {response.status_code}")
+    except Exception as exc:
+        print(f"⚠️  Error fetching .well-known config: {exc}")
+    return None
+
+
 def get_keycloak_config() -> Dict[str, str]:
     repo_root = os.path.dirname(os.path.dirname(__file__))
     env_from_file = load_env_file(os.path.join(repo_root, ".env"))
@@ -165,18 +177,41 @@ def get_keycloak_config() -> Dict[str, str]:
         env_from_file.get("KEYCLOAK_ISSUER", internal_realm),
     ).rstrip("/")
 
-    return {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "issuer": issuer,
-        "introspection_endpoint": f"{internal_realm}/protocol/openid-connect/token/introspect",
-        "token_endpoint": f"{internal_realm}/protocol/openid-connect/token",
-        "revoke_endpoint": f"{internal_realm}/protocol/openid-connect/revoke",
-        "userinfo_endpoint": f"{internal_realm}/protocol/openid-connect/userinfo",
-        "authorize_endpoint": f"{internal_realm}/protocol/openid-connect/auth",
-        "jwks_endpoint": f"{internal_realm}/protocol/openid-connect/certs",
-        "well_known": f"{issuer}/.well-known/openid-configuration",
-    }
+    well_known_url = f"{internal_realm}/.well-known/openid-configuration"
+    
+    # Try to fetch from .well-known endpoint
+    print(f"📡 Fetching configuration from: {well_known_url}")
+    well_known = fetch_well_known_config(well_known_url)
+    
+    if well_known:
+        print("✅ Using endpoints from .well-known configuration")
+        return {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "issuer": well_known.get("issuer", issuer),
+            "introspection_endpoint": well_known.get("introspection_endpoint", f"{internal_realm}/protocol/openid-connect/token/introspect"),
+            "token_endpoint": well_known.get("token_endpoint", f"{internal_realm}/protocol/openid-connect/token"),
+            "revoke_endpoint": well_known.get("revocation_endpoint", f"{internal_realm}/protocol/openid-connect/revoke"),
+            "userinfo_endpoint": well_known.get("userinfo_endpoint", f"{internal_realm}/protocol/openid-connect/userinfo"),
+            "authorize_endpoint": well_known.get("authorization_endpoint", f"{internal_realm}/protocol/openid-connect/auth"),
+            "jwks_endpoint": well_known.get("jwks_uri", f"{internal_realm}/protocol/openid-connect/certs"),
+            "well_known": well_known_url,
+        }
+    else:
+        # Fallback to manual construction
+        print("⚠️  Using fallback endpoint construction")
+        return {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "issuer": issuer,
+            "introspection_endpoint": f"{internal_realm}/protocol/openid-connect/token/introspect",
+            "token_endpoint": f"{internal_realm}/protocol/openid-connect/token",
+            "revoke_endpoint": f"{internal_realm}/protocol/openid-connect/revoke",
+            "userinfo_endpoint": f"{internal_realm}/protocol/openid-connect/userinfo",
+            "authorize_endpoint": f"{internal_realm}/protocol/openid-connect/auth",
+            "jwks_endpoint": f"{internal_realm}/protocol/openid-connect/certs",
+            "well_known": well_known_url,
+        }
 
 
 def wait_for_service(name: str, url: str, verify: bool = False, retries: int = 40, delay: int = 6) -> bool:
@@ -206,13 +241,13 @@ def main() -> None:
     admin_user = os.getenv("WSO2_ADMIN_USERNAME", env_from_file.get("WSO2_ADMIN_USERNAME", "admin"))
     admin_pass = os.getenv("WSO2_ADMIN_PASSWORD", env_from_file.get("WSO2_ADMIN_PASSWORD", "admin"))
 
-    keycloak_public = os.getenv(
-        "KEYCLOAK_PUBLIC_REALM_URL",
-        env_from_file.get("KEYCLOAK_PUBLIC_REALM_URL", "http://localhost:8080/realms/innover"),
+    keycloak_internal = os.getenv(
+        "KEYCLOAK_INTERNAL_REALM_URL",
+        env_from_file.get("KEYCLOAK_INTERNAL_REALM_URL", "http://keycloak:8080/realms/innover"),
     ).rstrip("/")
 
     print("\n🔄 Checking Keycloak availability...")
-    if not wait_for_service("Keycloak", f"{keycloak_public}/.well-known/openid-configuration"):
+    if not wait_for_service("Keycloak", f"{keycloak_internal}/.well-known/openid-configuration"):
         sys.exit(1)
 
     print("🔄 Checking WSO2 API Manager availability...")
@@ -231,15 +266,15 @@ def main() -> None:
     existing_km = configurator.check_keycloak_exists()
 
     if existing_km:
-        print(f"⚠️  Keycloak Key Manager already exists (ID: {existing_km['id']})")
-        result = configurator.update(existing_km["id"], keycloak_config)
+        print(f"✅ Keycloak Key Manager already exists (ID: {existing_km['id']})")
+        print("   Skipping configuration (already set up)")
+        result = existing_km
     else:
         print("📝 Creating new Keycloak Key Manager...")
         result = configurator.configure(keycloak_config)
-
-    if not result:
-        print("\n❌ Failed to configure Keycloak integration")
-        sys.exit(1)
+        if not result:
+            print("\n❌ Failed to configure Keycloak integration")
+            sys.exit(1)
 
     print("\n" + "=" * 70)
     print("✅ Keycloak Integration Complete!")

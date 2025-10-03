@@ -2,12 +2,16 @@ SHELL := /bin/bash
 
 .PHONY: up down rebuild logs ps proto urls smoke-test nuke restart health workers publish-apis
 
-# Start all services
+# Start all services (WSO2 setup runs automatically)
 up:
 	docker compose up -d --build
-	@echo "Waiting for services to be ready..."
-	@sleep 90
-	$(MAKE) setup
+	@echo ""
+	@echo "✅ All services started!"
+	@echo ""
+	@echo "📊 WSO2 setup will run automatically via wso2-setup container"
+	@echo "   Monitor with: docker logs -f wso2-setup"
+	@echo ""
+	@echo "⏳ Estimated setup time: 2-3 minutes"
 
 # Rebuild without cache
 rebuild:
@@ -82,28 +86,36 @@ test-worker-%:
 db-shell:
 	docker compose exec cockroach1 /cockroach/cockroach sql --insecure --host=cockroach1:26257 --database=innover
 
-# Redis CLI
-redis-cli:
 	docker compose exec redis sh -c 'redis-cli -a "$$REDIS_PASSWORD"'
 
 # Kafka topic list
 	docker compose exec redpanda rpk topic list --brokers redpanda:9092
 
-# Complete setup: Configure Keycloak + Publish APIs
+# Manual setup (if wso2-setup container fails or for re-configuration)
 setup:
+	@echo "Running manual WSO2 setup..."
+	@echo ""
 	@echo "Configuring Keycloak Key Manager..."
 	python3 wso2/configure-keycloak.py
 	@echo ""
 	@echo "Publishing APIs to WSO2..."
 	python3 wso2/wso2-publisher-from-config.py
 	@echo ""
+	@echo "Creating Application (Service Provider)..."
+	python3 wso2/create-application.py
+	@echo ""
 	@echo "Setup complete!"
+
+# Check WSO2 setup status
+setup-status:
+	@echo "=== WSO2 Setup Status ==="
+	@docker logs wso2-setup 2>&1 | tail -30 || echo "Setup container not found or not started yet"
 
 # Publish APIs to WSO2
 publish-apis:
 	python3 wso2/wso2-publisher-from-config.py
 
-# Configure Keycloak integration with WSO2
+{{ ... }}
 configure-keycloak:
 	@echo "=== Configuring Keycloak Integration with WSO2 ==="
 	@pip install -q requests 2>/dev/null || echo "Installing dependencies..."

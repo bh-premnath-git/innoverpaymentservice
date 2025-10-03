@@ -32,5 +32,10 @@ RUN chmod +x /opt/keycloak/create-users.sh /opt/keycloak/entrypoint-wrapper.sh &
 USER keycloak
 
 ENV KC_HEALTH_ENABLED=true
+ENV KC_DB=postgres
+
+# Build Keycloak with database configuration
+RUN /opt/keycloak/bin/kc.sh build --db=postgres
+
 ENTRYPOINT ["/opt/keycloak/entrypoint-wrapper.sh"]
-CMD ["start-dev", "--import-realm"]
+CMD ["start", "--import-realm", "--http-enabled=true", "--hostname-strict=false", "--proxy-headers=xforwarded", "--optimized"]

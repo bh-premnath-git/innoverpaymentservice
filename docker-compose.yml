@@ -94,12 +94,6 @@ services:
   keycloak:
     build:
       context: ./keycloak
-    command:
-      - start
-      - --import-realm
-      - --http-enabled=true
-      - --hostname-strict=false
-      - --proxy-headers=xforwarded
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
@@ -145,6 +139,26 @@ services:
       start_period: 120s
     deploy: *support_deploy
     restart: unless-stopped
+
+  wso2-setup:
+    build:
+      context: ./wso2
+    container_name: wso2-setup
+    environment:
+      WSO2_HOST: https://wso2am:9443
+      WSO2_ADMIN_USERNAME: admin
+      WSO2_ADMIN_PASSWORD: admin
+      KEYCLOAK_INTERNAL_REALM_URL: http://keycloak:8080/realms/innover
+      KEYCLOAK_ISSUER: http://keycloak:8080/realms/innover
+      WSO2_AM_CLIENT_ID: ${WSO2_AM_CLIENT_ID:-wso2am}
+      WSO2_AM_CLIENT_SECRET: ${WSO2_AM_CLIENT_SECRET:-wso2am-secret}
+    depends_on:
+      wso2am:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    extra_hosts: *extra_hosts
+    restart: "no"
 
   # -------- CockroachDB Cluster --------
   cockroach1:

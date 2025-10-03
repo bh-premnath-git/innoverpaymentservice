@@ -8,6 +8,7 @@ import requests
 import json
 import time
 import sys
+import os
 import yaml
 from typing import Dict, List, Optional
 from urllib3.exceptions import InsecureRequestWarning
@@ -40,7 +41,7 @@ class WSO2APIPublisher:
             "lifeCycleStatus": "CREATED",
             "policies": api_config.get("policies", global_settings.get("throttling_policies", ["Unlimited"])),
             "visibility": api_config.get("visibility", global_settings.get("visibility", "PUBLIC")),
-            "securityScheme": [],  # No security for direct access with Keycloak tokens
+            "securityScheme": ["oauth2"],  # Enable OAuth2 for Keycloak tokens
             "transport": api_config.get("transport", global_settings.get("transport", ["http", "https"])),
             "tags": api_config.get("tags", []),
         }
@@ -154,6 +155,44 @@ class WSO2APIPublisher:
         except Exception as e:
             print(f"❌ Error listing APIs: {str(e)}")
             return []
+    
+    def create_revision(self, api_id: str) -> Optional[str]:
+        """Create a new revision for the API"""
+        try:
+            payload = {"description": "Initial revision for deployment"}
+            response = self.session.post(f"{self.publisher_api}/apis/{api_id}/revisions", json=payload)
+            if response.status_code in (200, 201):
+                revision_id = response.json().get('id')
+                return revision_id
+            else:
+                print(f"⚠️  Failed to create revision for {api_id}: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"⚠️  Error creating revision for {api_id}: {str(e)}")
+            return None
+    
+    def deploy_revision(self, api_id: str, revision_id: str) -> bool:
+        """Deploy a revision to the gateway"""
+        try:
+            payload = [
+                {
+                    "name": "Default",
+                    "vhost": "localhost",
+                    "displayOnDevportal": True
+                }
+            ]
+            response = self.session.post(
+                f"{self.publisher_api}/apis/{api_id}/deploy-revision?revisionId={revision_id}",
+                json=payload
+            )
+            if response.status_code in (200, 201):
+                return True
+            else:
+                print(f"⚠️  Failed to deploy revision {revision_id} for {api_id}: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"⚠️  Error deploying revision for {api_id}: {str(e)}")
+            return False
 
 
 def load_config(config_file: str = "api-config.yaml") -> Dict:
@@ -191,8 +230,13 @@ def main():
     config = load_config()
     global_settings = config.get('global_settings', {})
     
+    # Get WSO2 connection details from environment
+    wso2_host = os.getenv("WSO2_HOST", "https://localhost:9443").rstrip("/")
+    admin_user = os.getenv("WSO2_ADMIN_USERNAME", "admin")
+    admin_pass = os.getenv("WSO2_ADMIN_PASSWORD", "admin")
+    
     # Initialize publisher
-    publisher = WSO2APIPublisher()
+    publisher = WSO2APIPublisher(host=wso2_host, username=admin_user, password=admin_pass)
     
     # Wait for WSO2 to be ready
     print("\n🔄 Checking WSO2 API Manager availability...")
@@ -259,6 +303,18 @@ def main():
         publisher.publish_api(api_id)
         time.sleep(1)
     
+    # Create revisions and deploy to gateway
+    print(f"\n🚀 Deploying {len(created_apis)} API(s) to gateway...\n")
+    deployed_count = 0
+    for api_id in created_apis:
+        revision_id = publisher.create_revision(api_id)
+        if revision_id:
+            if publisher.deploy_revision(api_id, revision_id):
+                deployed_count += 1
+        time.sleep(0.5)
+    
+    print(f"\n✅ Successfully deployed {deployed_count}/{len(created_apis)} API(s)")
+    
     # List all APIs
     print("\n📊 Current APIs in WSO2:\n")
     all_apis_list = publisher.list_apis()
@@ -267,7 +323,7 @@ def main():
         print(f"{status_icon} {api.get('name')} - {api.get('context')} ({api.get('lifeCycleStatus')})")
     
     print("\n" + "=" * 70)
-    print("✅ API Publishing Complete!")
+    print("✅ API Publishing and Deployment Complete!")
     print("=" * 70)
     print(f"\n🌐 WSO2 Publisher: https://localhost:9443/publisher")
     print(f"🌐 Developer Portal: https://localhost:9443/devportal")
