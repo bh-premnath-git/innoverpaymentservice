@@ -156,26 +156,19 @@ make up
 `make up` performs a `docker compose up -d --build`, ensuring images are rebuilt before the services launch. Wait for the CockroachDB bootstrap jobs to finish (`docker compose logs -f cockroach-bootstrap`) before publishing or invoking APIs through WSO2 API Manager at `https://localhost:9443`.
 
 ### Useful commands
-- `make up` – Start all containers with a fresh build (`docker compose up -d --build`).
-- `make ps` – Show container status as reported by Docker Compose.
-- `make health` – Print a table of container health checks for quick diagnostics.
-- `make logs` – Follow all container logs with a 200-line tail, useful when developing service logic.
-- `make logs-<svc>` – Tail logs for a specific service, mirroring `docker compose logs -f --tail=100 <svc>`.
-- `make rebuild` – Force a clean rebuild of every image without starting containers, ideal when base images or dependencies change.
-- `make restart-<svc>` – Restart a single service when you need to reload configuration quickly.
-- `make down` – Tear down the environment and remove volumes so CockroachDB and Redpanda state resets between experiments.
-- `make nuke` – Remove containers, volumes, and images for a completely clean slate.
-- `make urls` – Echo quick links to Keycloak, WSO2 API Manager, Jaeger, CockroachDB, Redis, and Redpanda.
-- `make smoke-test` – Run the comprehensive smoke test script (`./smoke-test.sh`).
-- `make workers` – Inspect the active task list for every Celery worker container.
-- `make test-worker-<svc>` – Dispatch a sample Celery task to a worker queue to verify connectivity.
-- `make proto` – Regenerate protobuf stubs via `generate_protos.sh`.
-- `make db-shell` – Open an interactive CockroachDB SQL shell inside the `cockroach1` container.
-- `make redis-cli` – Launch the Redis CLI authenticated with the configured password.
-- `make kafka-topics` – List Redpanda (Kafka) topics through `rpk`.
-- `make publish-apis` – Automatically publish all APIs to WSO2 API Manager from `wso2/api-config.yaml`.
+# Restart services
+docker compose down
+docker compose up -d --build
 
-If you need direct access to a service container, use `docker compose exec <service> bash` and note that each heartbeat script runs in the foreground printing `[tick n] alive` messages.
+# Wait for services (90 seconds)
+sleep 90
+
+# Run setup
+make setup
+
+# Test from local machine
+python3 sandbox/test_keycloak_token.py
+python3 sandbox/test_services_direct.py
 
 ## Protobuf toolchain
 Domain APIs live under `protos/<domain>/v1`. The provided `generate_protos.sh` script iterates through each domain, compiles `.proto` definitions with `grpc_tools.protoc`, and drops Python stubs into the corresponding `services/<name>/app/generated` directory (creating it if necessary). Because the script shells out to `python -m grpc_tools.protoc`, developers must install `grpcio-tools` **before** invoking the Make target—for example:
@@ -282,7 +275,7 @@ Empty `.proto` placeholders are already present so you only need to populate the
 
 Key directories at the repository root:
 
-- `services/` – Six placeholder Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding.
+- `services/` – Six Python microservices with identical Dockerfiles, heartbeat loops, and Celery scaffolding.
 - `protos/` – Versioned gRPC API definitions per domain.
 - `keycloak/` – Realm export and Dockerfile consumed during Keycloak startup.
 - `wso2/` – WSO2 API Manager automation scripts and API configuration (REST, GraphQL, WebSocket, AI/LLM).
@@ -290,6 +283,5 @@ Key directories at the repository root:
 - `docker-compose.yml` – Orchestrates services, infrastructure, and bootstrap jobs.
 - `Makefile` – Convenience targets for the local workflow.
 - `generate_protos.sh` – Regenerates gRPC stubs into each service directory.
-- `smoke-test.sh` – Basic smoke test script for the stack.
 - `sandbox/` – Scratch space for experiments.
 Use this map to locate the right directories as you flesh out APIs, persistence, and messaging logic.
