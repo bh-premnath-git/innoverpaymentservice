@@ -110,10 +110,11 @@ class WSO2ApplicationManager:
         callback_url: str = "",
         validity_time: int = 3600,
         additional_properties: Optional[Dict[str, str]] = None,
+        key_manager: Optional[str] = None,
     ) -> Optional[Dict[str, object]]:
         """
         Generate OAuth keys for an application
-        
+
         Args:
             app_id: Application ID
             key_type: PRODUCTION or SANDBOX
@@ -121,6 +122,7 @@ class WSO2ApplicationManager:
             callback_url: OAuth callback URL
             validity_time: Token validity in seconds (default: 3600 = 1 hour)
             additional_properties: Additional OAuth configuration
+            key_manager: External key manager to associate with generated keys
         """
         if grant_types is None:
             grant_types = [
@@ -160,6 +162,9 @@ class WSO2ApplicationManager:
             "additionalProperties": additional_properties,
         }
 
+        if key_manager:
+            payload["keyManager"] = key_manager
+
         try:
             response = self.session.post(
                 f"{self.devportal_api}/applications/{app_id}/generate-keys",
@@ -171,6 +176,21 @@ class WSO2ApplicationManager:
                 print(f"   Consumer Key: {keys.get('consumerKey', 'N/A')}")
                 print(f"   Consumer Secret: {keys.get('consumerSecret', 'N/A')[:20]}...")
                 return keys
+            if response.status_code == 409 and key_manager:
+                update_response = self.session.put(
+                    f"{self.devportal_api}/applications/{app_id}/keys/{key_type}",
+                    json=payload,
+                )
+                if update_response.status_code == 200:
+                    keys = update_response.json()
+                    print(f"♻️  Updated existing {key_type} keys for key manager '{key_manager}'")
+                    print(f"   Consumer Key: {keys.get('consumerKey', 'N/A')}")
+                    print(f"   Consumer Secret: {keys.get('consumerSecret', 'N/A')[:20]}...")
+                    return keys
+                print(
+                    f"⚠️  Failed to switch key manager for existing keys: {update_response.status_code}\n"
+                    f"   {update_response.text}"
+                )
             print(f"❌ Failed to generate keys: {response.status_code}\n   {response.text}")
         except Exception as exc:
             print(f"❌ Error generating keys: {exc}")
@@ -233,10 +253,16 @@ def main():
     app_description = "Default application for API access with Keycloak authentication"
     callback_url = "https://localhost:9443/devportal/applications"
 
+    default_key_manager = os.getenv(
+        "WSO2_DEFAULT_KEY_MANAGER",
+        env_from_file.get("WSO2_DEFAULT_KEY_MANAGER", "Keycloak"),
+    )
+
     print(f"\n📋 Application Configuration:")
     print(f"   Name: {app_name}")
     print(f"   Description: {app_description}")
     print(f"   Callback URL: {callback_url}")
+    print(f"   Key Manager: {default_key_manager}")
 
     # Check if application exists
     print(f"\n🔄 Checking if application '{app_name}' exists...")
@@ -271,6 +297,7 @@ def main():
         ],
         callback_url=callback_url,
         validity_time=3600,
+        key_manager=default_key_manager,
     )
 
     if not keys:

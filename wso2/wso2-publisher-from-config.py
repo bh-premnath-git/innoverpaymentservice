@@ -32,6 +32,17 @@ class WSO2APIPublisher:
         # Merge global settings with API-specific config
         cors_config = global_settings.get('cors', {})
         
+        default_key_manager = os.getenv("WSO2_DEFAULT_KEY_MANAGER", "Keycloak")
+
+        def _normalize_key_managers(values: Optional[object]) -> List[str]:
+            if not values:
+                return [default_key_manager]
+            if isinstance(values, str):
+                return [values]
+            if isinstance(values, (list, tuple, set)):
+                return [str(value) for value in values if value]
+            return [str(values)]
+
         base_payload = {
             "name": api_config["name"],
             "context": api_config["context"],
@@ -42,6 +53,12 @@ class WSO2APIPublisher:
             "policies": api_config.get("policies", global_settings.get("throttling_policies", ["Unlimited"])),
             "visibility": api_config.get("visibility", global_settings.get("visibility", "PUBLIC")),
             "securityScheme": ["oauth2"],  # Enable OAuth2 for Keycloak tokens
+            "keyManagers": _normalize_key_managers(
+                api_config.get(
+                    "key_managers",
+                    global_settings.get("key_managers") if isinstance(global_settings, dict) else None,
+                )
+            ),
             "transport": api_config.get("transport", global_settings.get("transport", ["http", "https"])),
             "tags": api_config.get("tags", []),
         }

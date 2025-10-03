@@ -170,8 +170,8 @@ class WSO2KeyManagerConfigurator:
             ],
             "consumerKeyClaim": "azp",
             "scopesClaim": "scope",
-            # Tokens issued by Keycloak are exchanged at the Gateway.
-            "tokenType": "EXCHANGED",
+            # Accept raw JWTs issued by Keycloak without an additional exchange flow.
+            "tokenType": "JWT",
             "additionalProperties": {
                 "client_id": config["client_id"],
                 "client_secret": config["client_secret"],
