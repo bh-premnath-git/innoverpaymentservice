@@ -138,6 +138,8 @@ class KeyManagerConfigurator:
         
         # 4) Build payload (Admin v4)
         # Use "default" type for WSO2 APIM 4.6.0-alpha3 (Keycloak connector may not be installed)
+        key_manager_service_url = keycloak_issuer.rstrip("/")
+
         km_config = {
             "name": "Keycloak",
             "displayName": "Keycloak",
@@ -181,6 +183,11 @@ class KeyManagerConfigurator:
                 {"name": "client_id", "value": km_client_id},
                 {"name": "client_secret", "value": km_client_secret},
                 {"name": "scopeClaim", "value": "scope"},
+                # WSO2 expects a base Key Manager service URL, which is used when
+                # loading the configuration. Without this property the APIM server
+                # attempts to split a null value, leading to a NullPointerException
+                # during startup. Use the Keycloak issuer URL as the base endpoint.
+                {"name": "keyManagerServiceUrl", "value": key_manager_service_url},
             ],
 
             # Grant types that the external KM supports (matches Keycloak defaults)
