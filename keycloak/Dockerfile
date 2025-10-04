@@ -14,7 +14,7 @@ RUN mkdir -p /mnt/rootfs \
 #
 # Stage 2: Final Keycloak image
 #
-FROM quay.io/keycloak/keycloak:26.4
+FROM keycloak/keycloak:26.4
 
 # Copy curl and jq binaries from UBI9 with all dependencies
 USER root

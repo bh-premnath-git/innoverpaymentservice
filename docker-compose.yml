@@ -1,4 +1,7 @@
+version: "3.9"
+
 x-svc-env: &svc_env
+  # We'll override OIDC_ISSUER per service to the sslip URL; keep defaults here safe.
   OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-wso2am}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
@@ -6,18 +9,6 @@ x-svc-env: &svc_env
 
 x-extra-hosts: &extra_hosts
   - "host.docker.internal:host-gateway"
-
-x-default-deploy: &default_deploy
-  resources:
-    limits:
-      cpus: "0.50"
-      memory: 512M
-
-x-worker-deploy: &worker_deploy
-  resources:
-    limits:
-      cpus: "0.75"
-      memory: 768M
 
 x-db-deploy: &db_deploy
   resources:
@@ -31,18 +22,27 @@ x-support-deploy: &support_deploy
       cpus: "1.00"
       memory: 1G
 
-x-light-deploy: &light_deploy
+x-light_deploy: &light_deploy
   resources:
     limits:
       cpus: "0.25"
       memory: 256M
 
-x-cockroach-healthcheck: &cockroach_healthcheck
-  test: ["CMD", "/cockroach/cockroach", "sql", "--insecure", "--host=localhost:26257", "-e", "SELECT 1"]
-  interval: 10s
-  timeout: 10s
-  retries: 10
-  start_period: 60s
+x-default_deploy: &default_deploy
+  resources:
+    limits:
+      cpus: "0.50"
+      memory: 512M
+
+x-worker_deploy: &worker_deploy
+  resources:
+    limits:
+      cpus: "0.75"
+      memory: 768M
+
+networks:
+  edge:
+    driver: bridge
 
 services:
   keycloak-database:
@@ -60,6 +60,132 @@ services:
       retries: 10
     deploy: *db_deploy
     restart: unless-stopped
+    networks: [edge]
+
+  keycloak:
+    build:
+      context: ./keycloak
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-database:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
+
+      # Hostname configuration for edge proxy (Nginx with TLS)
+      KC_HOSTNAME: auth.127.0.0.1.sslip.io
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    command: ["start-dev", "--import-realm", "--proxy-headers=xforwarded"]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.50"
+          memory: 1.5G
+    depends_on:
+      keycloak-database:
+        condition: service_healthy
+    expose:
+      - "8080"    # internal only; Nginx fronts it
+    restart: unless-stopped
+    networks: [edge]
+
+  wso2am:
+    image: wso2/wso2am:4.6.0-alpha3
+    environment:
+      JVM_MEM_OPTS: "-Xms512m -Xmx1024m"
+      <<: *svc_env
+      # OVERRIDE issuer to the sslip.io hostname (EXACT match with Keycloak):
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.127.0.0.1.sslip.io/realms/innover}
+    expose:
+      - "8280"
+      - "9443"
+    volumes:
+      - wso2am-data:/home/wso2carbon/wso2am-4.6.0/repository
+    extra_hosts: *extra_hosts
+    healthcheck:
+      test: ["CMD-SHELL", "curl -k -f https://localhost:9443/carbon/admin/login.jsp -o /dev/null -s || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+    deploy: *support_deploy
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    networks: [edge]
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      - keycloak
+      - wso2am
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    networks:
+      edge:
+        aliases:
+          # Containers will resolve these hostnames to the Nginx container
+          - auth.127.0.0.1.sslip.io
+          - apim.127.0.0.1.sslip.io
+    restart: unless-stopped
+
+  wso2-setup:
+    build:
+      context: ./wso2
+    container_name: wso2-setup
+    environment:
+      WSO2_HOST: https://wso2am:9443
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
+      API_CONFIG_FILE: /config/api-config.yaml
+    volumes:
+      - ./wso2/api-config.yaml:/config/api-config.yaml:ro
+      - ./wso2/output:/config
+    depends_on:
+      wso2am:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    extra_hosts: *extra_hosts
+    restart: "no"
+    networks: [edge]
+
+  keycloak-km-setup:
+    build:
+      context: ./wso2
+    container_name: keycloak-km-setup
+    entrypoint: ["python3", "/app/configure-keycloak-km.py"]
+    environment:
+      WSO2_HOST: https://wso2am:9443
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
+      KEYCLOAK_KM_CLIENT_ID: ${KEYCLOAK_KM_CLIENT_ID:-wso2am}
+      KEYCLOAK_KM_CLIENT_SECRET: ${KEYCLOAK_KM_CLIENT_SECRET:-wso2am-secret}
+    depends_on:
+      wso2am:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    extra_hosts: *extra_hosts
+    restart: "no"
+    networks: [edge]
 
   jaeger:
     image: jaegertracing/all-in-one:latest
@@ -72,6 +198,7 @@ services:
           cpus: "1.00"
           memory: 1G
     restart: unless-stopped
+    networks: [edge]
 
   otel-collector:
     build:
@@ -90,616 +217,8 @@ services:
       retries: 5
       start_period: 10s
     restart: unless-stopped
-
-  keycloak:
-    build:
-      context: ./keycloak
-    environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-admin}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-database:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
-      KC_HOSTNAME_URL: ${KEYCLOAK_PUBLIC_BASE_URL:-http://localhost:8080}
-      KC_HOSTNAME_ADMIN_URL: ${KEYCLOAK_INTERNAL_BASE_URL:-http://keycloak:8080}
-      KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_HTTPS: "false"
-      KC_PROXY_HEADERS: xforwarded
-    volumes:
-      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
-    healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200 OK'"]
-      interval: 10s
-      timeout: 5s
-      retries: 15
-      start_period: 120s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.50"
-          memory: 1.5G
-    depends_on:
-      keycloak-database:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-
-  wso2am:
-    image: wso2/wso2am:latest
-    environment:
-      JVM_MEM_OPTS: "-Xms512m -Xmx1024m"
-    ports:
-      - "8280:8280"
-      - "9443:9443"
-    volumes:
-      - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
-    extra_hosts: *extra_hosts
-    healthcheck:
-      test: ["CMD-SHELL", "curl -k -fsS https://localhost:9443/services/Version >> /dev/null"]
-      interval: 30s
-      timeout: 10s
-      retries: 10
-      start_period: 120s
-    deploy: *support_deploy
-    restart: unless-stopped
-
-  wso2-setup:
-    build:
-      context: ./wso2
-    container_name: wso2-setup
-    environment:
-      WSO2_HOST: https://wso2am:9443
-      WSO2_ADMIN_USERNAME: admin
-      WSO2_ADMIN_PASSWORD: admin
-      KEYCLOAK_INTERNAL_REALM_URL: http://keycloak:8080/realms/innover
-      KEYCLOAK_PUBLIC_BASE_URL: http://localhost:8080
-      KEYCLOAK_PUBLIC_REALM_URL: http://localhost:8080/realms/innover
-      KEYCLOAK_ISSUER: http://localhost:8080/realms/innover
-      WSO2_AM_CLIENT_ID: ${WSO2_AM_CLIENT_ID:-wso2am}
-      WSO2_AM_CLIENT_SECRET: ${WSO2_AM_CLIENT_SECRET:-wso2am-secret}
-    depends_on:
-      wso2am:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
-    extra_hosts: *extra_hosts
-    restart: "no"
-
-  # -------- CockroachDB Cluster --------
-  cockroach1:
-    image: cockroachdb/cockroach:v24.2.5
-    hostname: cockroach1
-    container_name: cockroach1
-    command:
-      - start
-      - --insecure
-      - --listen-addr=cockroach1:26357
-      - --advertise-addr=cockroach1:26357
-      - --sql-addr=cockroach1:26257
-      - --http-addr=cockroach1:8080
-      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
-      - --cache=.25
-      - --max-sql-memory=.25
-    ports:
-      - "26257:26257"   # SQL
-      - "8082:8080"     # Admin UI
-    volumes:
-      - cockroach1:/cockroach/cockroach-data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://cockroach1:8080/health?ready=1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-    restart: unless-stopped
-    deploy: *db_deploy
-
-  cockroach2:
-    image: cockroachdb/cockroach:v24.2.5
-    hostname: cockroach2
-    container_name: cockroach2
-    command:
-      - start
-      - --insecure
-      - --listen-addr=cockroach2:26357
-      - --advertise-addr=cockroach2:26357
-      - --sql-addr=cockroach2:26257
-      - --http-addr=cockroach2:8080
-      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
-      - --cache=.25
-      - --max-sql-memory=.25
-    volumes:
-      - cockroach2:/cockroach/cockroach-data
-    depends_on:
-      cockroach1:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://cockroach2:8080/health?ready=1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-    restart: unless-stopped
-    deploy: *db_deploy
-
-  cockroach3:
-    image: cockroachdb/cockroach:v24.2.5
-    hostname: cockroach3
-    container_name: cockroach3
-    command:
-      - start
-      - --insecure
-      - --listen-addr=cockroach3:26357
-      - --advertise-addr=cockroach3:26357
-      - --sql-addr=cockroach3:26257
-      - --http-addr=cockroach3:8080
-      - --join=cockroach1:26357,cockroach2:26357,cockroach3:26357
-      - --cache=.25
-      - --max-sql-memory=.25
-    volumes:
-      - cockroach3:/cockroach/cockroach-data
-    depends_on:
-      cockroach2:
-        condition: service_started
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://cockroach3:8080/health?ready=1"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-    restart: unless-stopped
-    deploy: *db_deploy
-
-  cockroach-init-cluster:
-    image: cockroachdb/cockroach:v24.2.5
-    container_name: cockroach-init-cluster
-    entrypoint: []
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        echo "Waiting for all nodes to be reachable..."
-        
-        # Simple HTTP health check (nodes respond even before init)
-        for node in cockroach1 cockroach2 cockroach3; do
-          echo "Checking $${node}..."
-          until curl -f http://$${node}:8080/health >/dev/null 2>&1; do
-            echo "Waiting for $${node}..."
-            sleep 2
-          done
-          echo "$${node} is up"
-        done
-
-        echo "All nodes are up. Waiting 20s for gossip to stabilize..."
-        sleep 20
-
-        echo "Initializing CockroachDB cluster..."
-        /cockroach/cockroach init --insecure --host=cockroach1:26357 || echo "Cluster already initialized"
-    depends_on:
-      cockroach1:
-        condition: service_started
-      cockroach2:
-        condition: service_started
-      cockroach3:
-        condition: service_started
-    restart: "no"
-    deploy: *default_deploy
-
-  # Database and user creation
-  cockroach-bootstrap:
-    image: cockroachdb/cockroach:v24.2.5
-    container_name: cockroach-bootstrap
-    entrypoint: []
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        echo "Waiting for cluster to accept SQL connections..."
-        max_attempts=30
-        attempt=0
-        while [ $$attempt -lt $$max_attempts ]; do
-          if /cockroach/cockroach sql --insecure --host=cockroach1:26257 -e 'SELECT 1' >/dev/null 2>&1; then
-            echo "SQL is ready!"
-            break
-          fi
-          echo "Attempt $$((attempt+1))/$$max_attempts: SQL not ready, waiting..."
-          sleep 3
-          attempt=$$((attempt+1))
-        done
-        [ $$attempt -lt $$max_attempts ] || { echo "SQL not ready in time"; exit 1; }
-
-        echo "Creating database and user..."
-        /cockroach/cockroach sql --insecure --host=cockroach1:26257 <<'EOF'
-        CREATE DATABASE IF NOT EXISTS innover;
-        CREATE USER IF NOT EXISTS fin;
-        GRANT ALL ON DATABASE innover TO fin;
-        SELECT 'Database setup complete' AS status;
-        EOF
-        echo "Bootstrap completed successfully!"
-    depends_on:
-      cockroach-init-cluster:
-        condition: service_completed_successfully
-    restart: "no"
-    deploy: *default_deploy
-
-  # -------- Application Services --------
-  profile:
-    build: ./services/profile
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-profile
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8001:8000"  # Expose profile service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  profile-worker:
-    build: ./services/profile
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "profile-worker@%h",
-        "--queues",
-        "profile-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-profile-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  payment:
-    build: ./services/payment
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-payment
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8002:8000"  # Expose payment service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  payment-worker:
-    build: ./services/payment
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "payment-worker@%h",
-        "--queues",
-        "payment-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-payment-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  ledger:
-    build: ./services/ledger
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-ledger
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8003:8000"  # Expose ledger service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  ledger-worker:
-    build: ./services/ledger
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "ledger-worker@%h",
-        "--queues",
-        "ledger-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-ledger-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  wallet:
-    build: ./services/wallet
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-wallet
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8004:8000"  # Expose wallet service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  wallet-worker:
-    build: ./services/wallet
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "wallet-worker@%h",
-        "--queues",
-        "wallet-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-wallet-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  rule-engine:
-    build: ./services/rule-engine
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-rules
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8005:8000"  # Expose rule-engine service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
-      interval: 30s
-      timeout: 3s
-      start_period: 10s
-      retries: 3
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  rule-engine-worker:
-    build: ./services/rule-engine
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "rule-engine-worker@%h",
-        "--queues",
-        "rule-engine-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-rules-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "celery -A celery_app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
-      interval: 30s
-      timeout: 10s
-      start_period: 30s
-      retries: 3
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  forex:
-    build: ./services/forex
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-forex
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    ports:
-      - "8006:8000"  # Expose forex service
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *default_deploy
-    restart: unless-stopped
-
-  forex-worker:
-    build: ./services/forex
-    working_dir: /app
-    command:
-      [
-        "celery",
-        "-A",
-        "celery_app.celery_app",
-        "worker",
-        "-l",
-        "info",
-        "--concurrency",
-        "2",
-        "--hostname",
-        "forex-worker@%h",
-        "--queues",
-        "forex-tasks"
-      ]
-    environment:
-      <<: *svc_env
-      SERVICE_NAME: svc-forex-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
-      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
-      KAFKA_BROKERS: redpanda:9092
-    extra_hosts: *extra_hosts
-    depends_on:
-      otel-collector:
-        condition: service_healthy
-      cockroach-bootstrap:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-      redpanda:
-        condition: service_healthy
-    deploy: *worker_deploy
-    restart: unless-stopped
-
-  # -------- Infrastructure Services --------
+    networks: [edge]
+  
   redis:
     image: redis:7-alpine
     environment:
@@ -714,6 +233,7 @@ services:
       start_period: 5s
     deploy: *light_deploy
     restart: unless-stopped
+    networks: [edge]
 
   redpanda:
     image: redpandadata/redpanda:v24.2.13
@@ -753,11 +273,370 @@ services:
           cpus: "1.50"
           memory: 1.5G
     restart: unless-stopped
+    networks: [edge]
+  
+  # -------- Application Services --------
+  profile:
+    build: ./services/profile
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-profile
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8001:8000"  # Expose profile service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  profile-worker:
+    build: ./services/profile
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "profile-worker@%h",
+        "--queues",
+        "profile-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-profile-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  payment:
+    build: ./services/payment
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-payment
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8002:8000"  # Expose payment service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  payment-worker:
+    build: ./services/payment
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "payment-worker@%h",
+        "--queues",
+        "payment-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-payment-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  ledger:
+    build: ./services/ledger
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-ledger
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8003:8000"  # Expose ledger service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  ledger-worker:
+    build: ./services/ledger
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "ledger-worker@%h",
+        "--queues",
+        "ledger-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-ledger-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  wallet:
+    build: ./services/wallet
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-wallet
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8004:8000"  # Expose wallet service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  wallet-worker:
+    build: ./services/wallet
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "wallet-worker@%h",
+        "--queues",
+        "wallet-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-wallet-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  rule-engine:
+    build: ./services/rule-engine
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-rules
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8005:8000"  # Expose rule-engine service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  rule-engine-worker:
+    build: ./services/rule-engine
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "rule-engine-worker@%h",
+        "--queues",
+        "rule-engine-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-rules-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A celery_app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  forex:
+    build: ./services/forex
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-forex
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    ports:
+      - "8006:8000"  # Expose forex service
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *default_deploy
+    restart: unless-stopped
+    networks: [edge]
+
+  forex-worker:
+    build: ./services/forex
+    working_dir: /app
+    command:
+      [
+        "celery",
+        "-A",
+        "celery_app.celery_app",
+        "worker",
+        "-l",
+        "info",
+        "--concurrency",
+        "2",
+        "--hostname",
+        "forex-worker@%h",
+        "--queues",
+        "forex-tasks"
+      ]
+    environment:
+      <<: *svc_env
+      SERVICE_NAME: svc-forex-worker
+      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+    extra_hosts: *extra_hosts
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    deploy: *worker_deploy
+    restart: unless-stopped
+    networks: [edge]
 
 volumes:
   keycloak-db:
   wso2am-data:
-  cockroach1:
-  cockroach2:
-  cockroach3:
   redpanda:

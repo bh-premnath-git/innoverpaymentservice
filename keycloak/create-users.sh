@@ -135,24 +135,3 @@ create_user "user" "user" "user"
 echo "=========================================="
 echo "All users created/updated successfully!"
 
-# Configure WSO2 API Manager client for direct access grants
-echo ""
-echo "Configuring WSO2 API Manager client..."
-WSO2_CLIENT_ID=$(curl -s -X GET "http://localhost:8080/admin/realms/innover/clients?clientId=wso2am" \
-    -H "Authorization: Bearer ${ADMIN_TOKEN}" | grep -o '"id":"[^"]*' | head -1 | cut -d'"' -f4)
-
-if [ -n "$WSO2_CLIENT_ID" ]; then
-    curl -s -X PUT "http://localhost:8080/admin/realms/innover/clients/${WSO2_CLIENT_ID}" \
-        -H "Authorization: Bearer ${ADMIN_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d '{"directAccessGrantsEnabled":true,"serviceAccountsEnabled":true}'
-    echo "✓ WSO2 API Manager client configured (direct access grants enabled)"
-fi
-
-echo ""
-echo "You can now log in with:"
-echo "  - admin/admin"
-echo "  - ops_user/ops_user"
-echo "  - finance/finance"
-echo "  - auditor/auditor"
-echo "  - user/user"

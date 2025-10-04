@@ -1,0 +1,43 @@
+# Environment variables with secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Docker
+docker-compose.override.yml
+
+# Generated credentials
+wso2/output/application-keys.json
+wso2/output/*.json
+wso2/output/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Certificates (for local dev only, regenerate in production)
+nginx/certs/*.key
+nginx/certs/*.crt
+
+# Temporary files
+*.tmp
+*.bak
