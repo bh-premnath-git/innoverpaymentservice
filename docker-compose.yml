@@ -107,9 +107,9 @@ services:
       <<: *svc_env
       # OVERRIDE issuer to the sslip.io hostname (EXACT match with Keycloak):
       OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.127.0.0.1.sslip.io/realms/innover}
-    expose:
-      - "8280"
-      - "9443"
+    ports:
+      - "8280:8280"
+      - "9443:9443"
     volumes:
       - wso2am-data:/home/wso2carbon/wso2am-4.6.0/repository
     extra_hosts: *extra_hosts
@@ -130,7 +130,6 @@ services:
     image: nginx:1.27-alpine
     depends_on:
       - keycloak
-      - wso2am
     ports:
       - "80:80"
       - "443:443"
@@ -142,7 +141,6 @@ services:
         aliases:
           # Containers will resolve these hostnames to the Nginx container
           - auth.127.0.0.1.sslip.io
-          - apim.127.0.0.1.sslip.io
     restart: unless-stopped
 
   wso2-setup:

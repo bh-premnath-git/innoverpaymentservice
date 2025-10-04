@@ -129,7 +129,7 @@ check_warn "To verify Key Manager, check setup logs:"
 echo "   $ docker compose logs keycloak-km-setup | grep '✓ Keycloak Key Manager configured'"
 echo ""
 echo "   Or visit WSO2 Admin Portal:"
-echo "   https://apim.127.0.0.1.sslip.io/admin → Key Managers"
+echo "   https://localhost:9443/admin → Key Managers"
 
 echo ""
 
@@ -146,7 +146,7 @@ fi
 echo "Testing API call with Keycloak token..."
 RESPONSE=$(curl -k -L -s -w "\nHTTP_CODE:%{http_code}" \
     -H "Authorization: Bearer $TOKEN" \
-    https://apim.127.0.0.1.sslip.io/api/profile/1.0.0/health 2>/dev/null)
+    https://localhost:9443/api/profile/1.0.0/health 2>/dev/null)
 
 HTTP_CODE=$(echo "$RESPONSE" | grep "HTTP_CODE:" | cut -d: -f2)
 
@@ -174,9 +174,9 @@ echo "  • Keycloak Issuer: https://auth.127.0.0.1.sslip.io/realms/innover"
 echo "  • JWKS Endpoint: https://auth.127.0.0.1.sslip.io/realms/innover/protocol/openid-connect/certs"
 echo ""
 echo "Management Portals:"
-echo "  • WSO2 Admin: https://apim.127.0.0.1.sslip.io/admin"
-echo "  • WSO2 Publisher: https://apim.127.0.0.1.sslip.io/publisher"
-echo "  • WSO2 DevPortal: https://apim.127.0.0.1.sslip.io/devportal"
+echo "  • WSO2 Admin: https://localhost:9443/admin"
+echo "  • WSO2 Publisher: https://localhost:9443/publisher"
+echo "  • WSO2 DevPortal: https://localhost:9443/devportal"
 echo "  • Keycloak Admin: https://auth.127.0.0.1.sslip.io/admin"
 echo ""
 
@@ -200,5 +200,5 @@ echo '    -d "client_id=wso2am" -d "client_secret=wso2am-secret" \'
 echo '    -d "username=admin" -d "password=admin" -d "grant_type=password" | jq -r ".access_token")'
 echo ""
 echo '  curl -k -L -H "Authorization: Bearer $TOKEN" \'
-echo '    https://apim.127.0.0.1.sslip.io/api/profile/1.0.0/health'
+echo '    https://localhost:9443/api/profile/1.0.0/health'
 echo ""
