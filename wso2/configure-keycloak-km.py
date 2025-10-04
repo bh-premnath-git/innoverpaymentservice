@@ -144,12 +144,12 @@ class KeyManagerConfigurator:
             "type": "default",  # Use default type, not Keycloak-specific
             "description": "Keycloak Key Manager for JWT validation",
             "enabled": True,
-            
+
             # For JWT validation at the Gateway:
             "issuer": keycloak_issuer,
             "scopesClaim": "scope",
             "consumerKeyClaim": "azp",
-            
+
             # Endpoints as individual top-level fields
             "introspectionEndpoint": introspect_ep,
             "tokenEndpoint": token_ep,
@@ -157,26 +157,39 @@ class KeyManagerConfigurator:
             "authorizeEndpoint": authorize_ep,
             "clientRegistrationEndpoint": reg_ep,
             "userInfoEndpoint": userinfo_ep,
-            
+            "wellKnownEndpoint": well_known,
+
             # Certificates for JWT validation
             "certificates": {
                 "type": "JWKS",
                 "value": jwks_ep
             },
-            
-            # Tell APIM we validate JWTs
+
+            # Tell APIM we validate JWTs using the JWKS endpoint from Keycloak
             "tokenValidation": [
                 {
-                    "type": "jwt",
-                    "value": {}
+                    "type": "JWT",
+                    "value": {
+                        "jwksEndpoint": jwks_ep,
+                        "issuer": keycloak_issuer
+                    }
                 }
             ],
-            
-            # Additional properties as key-value object
-            "additionalProperties": {
-                "client_id": km_client_id,
-                "client_secret": km_client_secret,
-            },
+
+            # Additional properties must be provided as a list of name/value objects
+            "additionalProperties": [
+                {"name": "client_id", "value": km_client_id},
+                {"name": "client_secret", "value": km_client_secret},
+                {"name": "scopeClaim", "value": "scope"},
+            ],
+
+            # Grant types that the external KM supports (matches Keycloak defaults)
+            "availableGrantTypes": [
+                "authorization_code",
+                "client_credentials",
+                "password",
+                "refresh_token",
+            ],
         }
         
         # Create or update
