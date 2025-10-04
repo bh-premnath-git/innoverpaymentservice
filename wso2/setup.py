@@ -482,9 +482,10 @@ def main():
     print(f"   APIs created: {len(created_apis)}")
     print(f"   Application: {app_name} (ID: {app_id})")
     print(f"\n🌐 Access WSO2 APIM:")
-    print(f"   Publisher: {wso2_host.replace('wso2am', 'apim.127.0.0.1.sslip.io')}/publisher")
-    print(f"   DevPortal: {wso2_host.replace('wso2am', 'apim.127.0.0.1.sslip.io')}/devportal")
-    print(f"   Admin: {wso2_host.replace('wso2am', 'apim.127.0.0.1.sslip.io')}/admin")
+    external_host = wso2_host.replace('wso2am', 'localhost')
+    print(f"   Publisher: {external_host}/publisher")
+    print(f"   DevPortal: {external_host}/devportal")
+    print(f"   Admin: {external_host}/admin")
     print()
 
 

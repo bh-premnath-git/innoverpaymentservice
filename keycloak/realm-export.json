@@ -36,7 +36,6 @@
                 "https://localhost:9443/*"
             ],
             "webOrigins": [
-                "https://apim.127.0.0.1.sslip.io",
                 "https://localhost:9443"
             ],
             "standardFlowEnabled": true,

@@ -69,7 +69,7 @@ TOKEN=$(curl -k -X POST https://auth.127.0.0.1.sslip.io/realms/innover/protocol/
 
 # Call API through WSO2 Gateway
 curl -k -H "Authorization: Bearer $TOKEN" \
-  https://apim.127.0.0.1.sslip.io/api/profile/1.0.0/health
+  https://localhost:9443/api/profile/1.0.0/health
 ```
 
 ### Role-Based Access Control (RBAC)

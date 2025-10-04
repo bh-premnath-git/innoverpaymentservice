@@ -237,7 +237,7 @@ def main():
         print("✅ Keycloak Key Manager Configuration Complete!")
         print("=" * 70)
         print("\n📝 Next Steps:")
-        print("1. Go to WSO2 Admin Portal: https://apim.127.0.0.1.sslip.io/admin")
+        print("1. Go to WSO2 Admin Portal: https://localhost:9443/admin")
         print("2. Navigate to: Key Managers")
         print("3. Verify 'Keycloak' Key Manager is listed and enabled")
         print("4. When creating APIs, select 'Keycloak' as the Key Manager")
@@ -254,7 +254,7 @@ def main():
         print(f"     -d 'grant_type=password'")
         print("\n2. Use token with WSO2 APIs:")
         print("   curl -k -H 'Authorization: Bearer <keycloak_token>' \\")
-        print("     https://apim.127.0.0.1.sslip.io/api/profile/1.0.0/health")
+        print("     https://localhost:9443/api/profile/1.0.0/health")
     else:
         print("\n❌ Configuration failed. Check logs above.")
         sys.exit(1)
