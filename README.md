@@ -72,6 +72,45 @@ curl -k -H "Authorization: Bearer $TOKEN" \
   https://apim.127.0.0.1.sslip.io/api/profile/1.0.0/health
 ```
 
+### Role-Based Access Control (RBAC)
+
+Keycloak tokens include **realm roles** and **client roles** in both ID Token and Access Token:
+
+- **Realm roles**: `admin`, `ops_user`, `finance`, `auditor`, `user`
+- **Token claims**: `realm_access.roles` and `resource_access.<client>.roles`
+- **WSO2 integration**: Use roles for API subscription authorization and resource-level access control
+
+**Test role inclusion**:
+```bash
+# Quick verification script
+./test-roles.sh
+
+# Or use Python script
+python3 sandbox/test_keycloak_token.py admin admin
+```
+
+**Documentation**:
+- `KEYCLOAK-ROLE-MAPPERS.md` - Complete guide to protocol mappers and role configuration
+- `KEYCLOAK-OIDC-ENDPOINTS.md` - OIDC endpoint reference
+
+**Example token structure with roles**:
+```json
+{
+  "iss": "https://auth.127.0.0.1.sslip.io/realms/innover",
+  "preferred_username": "admin",
+  "realm_access": {
+    "roles": ["admin", "user"]
+  },
+  "resource_access": {
+    "wso2am": {
+      "roles": []
+    }
+  },
+  "email": "admin@innover.local",
+  "azp": "wso2am"
+}
+```
+
 ### Generated Credentials
 
 After running `docker compose up wso2-setup`, check generated application keys:
