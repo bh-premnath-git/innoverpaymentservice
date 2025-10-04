@@ -1,0 +1,5 @@
+[server]
+hostname = "apim.127.0.0.1.sslip.io"
+
+[transport.https.properties]
+proxyPort = 443

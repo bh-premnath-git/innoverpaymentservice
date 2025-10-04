@@ -30,12 +30,8 @@
             "enabled": true,
             "clientAuthenticatorType": "client-secret",
             "secret": "wso2am-secret",
-            "rootUrl": "https://apim.127.0.0.1.sslip.io/commonauth",
-            "adminUrl": "https://apim.127.0.0.1.sslip.io/commonauth",
-            "baseUrl": "/commonauth",
+            "rootUrl": "https://localhost:9443/commonauth",
             "redirectUris": [
-                "https://apim.127.0.0.1.sslip.io/commonauth",
-                "https://apim.127.0.0.1.sslip.io/*",
                 "https://localhost:9443/commonauth",
                 "https://localhost:9443/*"
             ],
