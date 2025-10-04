@@ -55,6 +55,16 @@ This repository is a fully containerized playground for an event-driven payments
 - **JWKS integration**: WSO2 fetches public keys from Keycloak automatically
 - **No token duplication**: Use Keycloak tokens directly with WSO2 APIs
 
+#### End-to-end authentication and routing story
+
+1. **User login** – A user signs into Keycloak (via the hosted login UI or an application using the OpenID Connect flow) and receives an access token that contains the user's realm and client roles.
+2. **Token presentation** – The client calls a published API on the WSO2 gateway and presents the Keycloak access token in the `Authorization: Bearer` header.
+3. **Token validation** – WSO2 verifies the JWT signature and issuer against Keycloak's JWKS endpoint, so no additional token minting is required inside WSO2.
+4. **Authorization decision** – WSO2 reads the embedded roles to enforce subscription policies and resource-level permissions that have been configured for the API.
+5. **API routing** – Once the token is validated and authorized, WSO2 forwards the request to the configured backend microservice endpoint. The backend trusts the already-validated token context or performs additional in-service checks as needed.
+
+This flow keeps Keycloak as the single source of truth for identity while allowing WSO2 to handle policy enforcement, observability, and backend routing for every API invocation.
+
 **Run the Key Manager setup**:
 
 **Test with Keycloak token**:
