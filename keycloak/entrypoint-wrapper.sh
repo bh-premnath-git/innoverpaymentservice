@@ -19,9 +19,13 @@ done
 echo "Keycloak is ready. Waiting 2 more seconds for full initialization..."
 sleep 2
 
-# Run user creation script in the background
+# Run user creation script in the background and create marker when done
 echo "Starting user creation..."
-/opt/keycloak/create-users.sh &
+(
+    /opt/keycloak/create-users.sh
+    touch /tmp/keycloak-setup-complete
+    echo "User creation complete - marker file created"
+) &
 
 # Wait for Keycloak process
 wait $KC_PID

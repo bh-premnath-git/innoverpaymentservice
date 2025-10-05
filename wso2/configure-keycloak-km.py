@@ -181,6 +181,8 @@ class KeyManagerConfigurator:
                 {"name": "client_id", "value": km_client_id},
                 {"name": "client_secret", "value": km_client_secret},
                 {"name": "scopeClaim", "value": "scope"},
+                {"name": "self_validate_jwt", "value": "true"},
+                {"name": "KeyManager.ServerURL", "value": keycloak_issuer.rsplit('/realms/', 1)[0]},
             ],
 
             # Grant types that the external KM supports (matches Keycloak defaults)

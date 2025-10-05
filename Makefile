@@ -82,9 +82,9 @@ test-worker-%:
 	@docker compose exec -T $* python -c "from celery_app import celery_app; r = celery_app.send_task('tasks.echo', args=['Hello from make!'], queue='$*-tasks'); print(f'Task ID: {r.id}')"
 	@echo "Check logs with: make logs-$*-worker"
 
-# Database shell
+# Database shell (uses DB_NAME from .env if available)
 db-shell:
-	docker compose exec cockroach1 /cockroach/cockroach sql --insecure --host=cockroach1:26257 --database=innover
+	docker compose exec cockroach1 /cockroach/cockroach sql --insecure --host=cockroach1:26257 --database=$${DB_NAME:-innover}
 
 	docker compose exec redis sh -c 'redis-cli -a "$$REDIS_PASSWORD"'
 

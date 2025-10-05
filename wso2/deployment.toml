@@ -1,2 +1,17 @@
 [server]
 hostname = "localhost"
+
+# JWT Token Validation for Keycloak (ONLY required config)
+[apim.jwt]
+enable = true
+encoding = "base64"
+header = "Authorization"
+claim_dialect = "http://wso2.org/claims"
+enable_user_claims = true
+
+[[apim.jwt.issuer]]
+issuer = "https://auth.127.0.0.1.sslip.io/realms/innover"
+jwks_endpoint = "https://auth.127.0.0.1.sslip.io/realms/innover/protocol/openid-connect/certs"
+validate_subscribed_apis = false
+consumer_key_claim = "azp"
+scopes_claim = "scope"

@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir \
     requests \
     pyyaml
 
-# Copy setup scripts
+# Copy setup scripts (mediation sequence is embedded in setup.py)
 COPY setup.py /app/setup.py
 COPY configure-keycloak-km.py /app/configure-keycloak-km.py
 RUN chmod +x /app/setup.py /app/configure-keycloak-km.py

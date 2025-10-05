@@ -1,5 +1,3 @@
-version: "3.9"
-
 x-svc-env: &svc_env
   # We'll override OIDC_ISSUER per service to the sslip URL; keep defaults here safe.
   OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
@@ -74,7 +72,8 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloakpass}
 
       # Hostname configuration for edge proxy (Nginx with TLS)
-      KC_HOSTNAME: auth.127.0.0.1.sslip.io
+      # Can be overridden with AUTH_HOSTNAME env var for remote deployments
+      KC_HOSTNAME: ${AUTH_HOSTNAME:-auth.127.0.0.1.sslip.io}
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: xforwarded
@@ -111,13 +110,13 @@ services:
       - "8280:8280"
       - "9443:9443"
     volumes:
-      - wso2am-data:/home/wso2carbon/wso2am-4.6.0/repository
+      - wso2am-data:/home/wso2carbon/wso2am-4.6.0-alpha3/repository
     extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD-SHELL", "curl -k -f https://localhost:9443/carbon/admin/login.jsp -o /dev/null -s || exit 1"]
-      interval: 20s
+      test: ["CMD-SHELL", "curl -k -f https://localhost:9443/services/Version || exit 1"]
+      interval: 15s
       timeout: 10s
-      retries: 15
+      retries: 20
       start_period: 180s
     deploy: *support_deploy
     depends_on:
@@ -126,10 +125,24 @@ services:
     restart: unless-stopped
     networks: [edge]
 
+  mkcert-setup:
+    image: alpine:latest
+    container_name: mkcert-setup
+    volumes:
+      - ./nginx/certs:/certs
+      - ./scripts/init-mkcert.sh:/init-mkcert.sh:ro
+    environment:
+      - DOMAINS=${AUTH_HOSTNAME:-auth.127.0.0.1.sslip.io},localhost,127.0.0.1
+    command: ["/bin/sh", "/init-mkcert.sh"]
+    deploy: *light_deploy
+    restart: "no"
+    networks: [edge]
+
   nginx:
     image: nginx:1.27-alpine
     depends_on:
       - keycloak
+      - mkcert-setup
     ports:
       - "80:80"
       - "443:443"
@@ -140,7 +153,7 @@ services:
       edge:
         aliases:
           # Containers will resolve these hostnames to the Nginx container
-          - auth.127.0.0.1.sslip.io
+          - ${AUTH_HOSTNAME:-auth.127.0.0.1.sslip.io}
     restart: unless-stopped
 
   wso2-setup:
@@ -152,6 +165,9 @@ services:
       WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
       WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
       API_CONFIG_FILE: /config/api-config.yaml
+      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+    entrypoint: ["python3", "/app/setup.py"]
     volumes:
       - ./wso2/api-config.yaml:/config/api-config.yaml:ro
       - ./wso2/output:/config
@@ -174,14 +190,55 @@ services:
       WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
       WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
       KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
-      KEYCLOAK_KM_CLIENT_ID: ${KEYCLOAK_KM_CLIENT_ID:-wso2am}
-      KEYCLOAK_KM_CLIENT_SECRET: ${KEYCLOAK_KM_CLIENT_SECRET:-wso2am-secret}
+      KEYCLOAK_KM_CLIENT_ID: ${KEYCLOAK_KM_CLIENT_ID}
+      KEYCLOAK_KM_CLIENT_SECRET: ${KEYCLOAK_KM_CLIENT_SECRET}
     depends_on:
       wso2am:
         condition: service_healthy
       keycloak:
         condition: service_healthy
     extra_hosts: *extra_hosts
+    restart: "no"
+    networks: [edge]
+
+  cockroach1:
+    image: cockroachdb/cockroach:v24.2.4
+    command: start-single-node --insecure --store=/cockroach/cockroach-data --listen-addr=:26257 --http-addr=:8082
+    ports:
+      - "26257:26257"
+      - "8082:8082"
+    volumes:
+      - cockroachdb:/cockroach/cockroach-data
+    healthcheck:
+      test: ["CMD-SHELL", "/cockroach/cockroach sql --insecure --host=localhost:26257 --execute='SELECT 1;' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.00"
+          memory: 2G
+    restart: unless-stopped
+    networks: [edge]
+
+  cockroach-init:
+    image: cockroachdb/cockroach:v24.2.4
+    environment:
+      DB_NAME: ${DB_NAME}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+    depends_on:
+      cockroach1:
+        condition: service_healthy
+    command: >
+      bash -c "
+        /cockroach/cockroach sql --insecure --host=$${DB_HOST}:$${DB_PORT} <<-EOSQL
+          CREATE DATABASE IF NOT EXISTS $${DB_NAME};
+        EOSQL
+        echo 'Database $${DB_NAME} initialized successfully'
+      "
     restart: "no"
     networks: [edge]
 
@@ -279,13 +336,15 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-profile
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     ports:
       - "8001:8000"  # Expose profile service
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -317,11 +376,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-profile-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -337,13 +398,15 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-payment
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     ports:
       - "8002:8000"  # Expose payment service
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -375,11 +438,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-payment-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -395,7 +460,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-ledger
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
@@ -433,11 +498,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-ledger-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -453,7 +520,7 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-wallet
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
@@ -491,11 +558,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-wallet-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -511,13 +580,15 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-rules
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     ports:
       - "8005:8000"  # Expose rule-engine service
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -555,11 +626,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-rules-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -581,13 +654,15 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-forex
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     ports:
       - "8006:8000"  # Expose forex service
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -619,11 +694,13 @@ services:
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-forex-worker
-      DB_URL: postgresql+psycopg2://fin@cockroach1:26257/innover?sslmode=disable
+      DB_URL: postgresql+psycopg2://${DB_USER}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis-secret}@redis:6379/0
       KAFKA_BROKERS: redpanda:9092
     extra_hosts: *extra_hosts
     depends_on:
+      cockroach1:
+        condition: service_healthy
       otel-collector:
         condition: service_healthy
       redis:
@@ -638,3 +715,4 @@ volumes:
   keycloak-db:
   wso2am-data:
   redpanda:
+  cockroachdb:
