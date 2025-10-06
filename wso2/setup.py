@@ -213,7 +213,7 @@ class WSO2APIManager:
             api_id = existing["id"]
             
             # Still apply security fixes to existing API
-            self.disable_api_security(api_id)
+            self.ensure_api_security(api_id)
             self.create_mediation_sequence(api_id)
             
             return api_id
@@ -227,7 +227,7 @@ class WSO2APIManager:
             key_managers = available_kms
             print(f"   ✓ Using Key Managers: {', '.join(key_managers)}")
         
-        # API payload for WSO2 4.x - we'll disable security after creation
+        # API payload for WSO2 4.x - rely on default gateway security model
         api_payload = {
             "name": name,
             "version": version,
@@ -249,8 +249,8 @@ class WSO2APIManager:
             "endpointImplementationType": "ENDPOINT",
             "policies": ["Unlimited"],
             "apiThrottlingPolicy": "Unlimited",
-            "authorizationHeader": "",  # Empty for public APIs
-            "securityScheme": [],  # Empty = No security (public API)
+            "authorizationHeader": "Authorization",
+            "securityScheme": ["oauth2"],
             "keyManagers": key_managers
         }
         
@@ -264,106 +264,106 @@ class WSO2APIManager:
             api_data = response.json()
             api_id = api_data["id"]
             print(f"   ✓ Created API: {api_id}")
-            
-            # Disable security in OpenAPI definition
-            self.disable_api_security(api_id)
-            
+
+            # Ensure OpenAPI definition keeps the default security contract
+            self.ensure_api_security(api_id)
+
             # Add mediation sequence as backup
             self.create_mediation_sequence(api_id)
-            
+
             return api_id
         else:
             print(f"   ❌ Failed to create API: {response.status_code}")
             print(f"      Response: {response.text[:200]}")
             return None
     
-    def disable_api_security(self, api_id: str) -> bool:
-        """Remove security and add catch-all paths to API OpenAPI definition"""
-        print(f"   🔓 Configuring API as passthrough proxy")
-        
+    def ensure_api_security(self, api_id: str) -> bool:
+        """Restore default security settings for the API and its Swagger definition"""
+        print("   🔐 Ensuring API security configuration")
+
         try:
-            # Get current swagger definition
+            api_response = self.session.get(f"{self.publisher_api}/apis/{api_id}")
+            print(f"   DEBUG: Get API config status: {api_response.status_code}")
+
+            if api_response.status_code == 200:
+                api_details = api_response.json()
+                updated = False
+
+                if not api_details.get("authorizationHeader"):
+                    api_details["authorizationHeader"] = "Authorization"
+                    updated = True
+
+                security_scheme = list(api_details.get("securityScheme") or [])
+                if "oauth2" not in security_scheme:
+                    security_scheme.append("oauth2")
+                    api_details["securityScheme"] = security_scheme
+                    updated = True
+
+                if updated:
+                    update_api_response = self.session.put(
+                        f"{self.publisher_api}/apis/{api_id}",
+                        json=api_details,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    print(f"   DEBUG: Update API config status: {update_api_response.status_code}")
+            else:
+                print(f"   ⚠️  Could not fetch API config: {api_response.status_code}")
+
+        except Exception as e:
+            print(f"   ❌ Exception while updating API config: {str(e)}")
+
+        try:
             response = self.session.get(f"{self.publisher_api}/apis/{api_id}/swagger")
             print(f"   DEBUG: Get swagger status: {response.status_code}")
-            
+
             if response.status_code != 200:
                 print(f"   ⚠️  Could not get swagger: {response.status_code}")
                 print(f"   Response: {response.text[:200]}")
                 return False
-            
+
             swagger = response.json()
-            
-            # Add catch-all path if no paths exist
-            if "paths" not in swagger or not swagger["paths"]:
-                swagger["paths"] = {
-                    "/*": {
-                        "get": {
-                            "responses": {"200": {"description": "OK"}},
-                            "security": [],
-                            "x-auth-type": "None",
-                            "x-throttling-tier": "Unlimited"
-                        },
-                        "post": {
-                            "responses": {"200": {"description": "OK"}},
-                            "security": [],
-                            "x-auth-type": "None",
-                            "x-throttling-tier": "Unlimited"
-                        },
-                        "put": {
-                            "responses": {"200": {"description": "OK"}},
-                            "security": [],
-                            "x-auth-type": "None",
-                            "x-throttling-tier": "Unlimited"
-                        },
-                        "delete": {
-                            "responses": {"200": {"description": "OK"}},
-                            "security": [],
-                            "x-auth-type": "None",
-                            "x-throttling-tier": "Unlimited"
-                        },
-                        "patch": {
-                            "responses": {"200": {"description": "OK"}},
-                            "security": [],
-                            "x-auth-type": "None",
-                            "x-throttling-tier": "Unlimited"
-                        }
-                    }
-                }
-            else:
-                # Remove security from existing operations
+            changed = False
+
+            if "paths" in swagger and swagger["paths"]:
                 for path_config in swagger["paths"].values():
                     for method_config in path_config.values():
                         if isinstance(method_config, dict):
-                            method_config["security"] = []
-                            method_config["x-auth-type"] = "None"
-                            # Remove WSO2-specific security enforcement
-                            if "x-wso2-application-security" in method_config:
-                                del method_config["x-wso2-application-security"]
-            
-            # Remove global security requirement
-            swagger["security"] = []
-            
-            print(f"   DEBUG: Updating swagger with {len(swagger.get('paths', {}))} paths")
-            
-            # Update swagger (WSO2 4.5.0 accepts both JSON and YAML)
-            update_response = self.session.put(
-                f"{self.publisher_api}/apis/{api_id}/swagger",
-                json=swagger,
-                headers={"Content-Type": "application/json"}
-            )
-            
-            print(f"   DEBUG: Update swagger status: {update_response.status_code}")
-            
-            if update_response.status_code == 200:
-                print(f"   ✓ API configured as passthrough proxy (no security)")
-                return True
+                            if method_config.get("security") == []:
+                                del method_config["security"]
+                                changed = True
+                            if method_config.get("x-auth-type") == "None":
+                                method_config["x-auth-type"] = "Application & Application User"
+                                changed = True
             else:
-                print(f"   ⚠️  Swagger update failed: {update_response.status_code}")
-                return False
+                swagger.setdefault("paths", {})
+
+            if not swagger.get("security"):
+                swagger["security"] = [{"default": []}]
+                changed = True
+
+            if changed:
+                print(f"   DEBUG: Updating swagger with {len(swagger.get('paths', {}))} paths")
+                update_response = self.session.put(
+                    f"{self.publisher_api}/apis/{api_id}/swagger",
+                    json=swagger,
+                    headers={"Content-Type": "application/json"}
+                )
+
+                print(f"   DEBUG: Update swagger status: {update_response.status_code}")
+
+                if update_response.status_code == 200:
+                    print("   ✓ API swagger now requires OAuth2 security")
+                    return True
+                else:
+                    print(f"   ❌ Failed to update swagger: {update_response.status_code}")
+                    print(f"   Response: {update_response.text[:200]}")
+                    return False
+
+            print("   ✓ API swagger already enforces security")
+            return True
+
         except Exception as e:
-            print(f"   ❌ Exception configuring API: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"   ❌ Exception while updating swagger: {str(e)}")
             return False
     
     def create_mediation_sequence(self, api_id: str) -> bool:

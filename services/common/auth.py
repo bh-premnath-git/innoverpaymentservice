@@ -24,7 +24,7 @@ security = HTTPBearer()
 
 # Environment variables - WSO2 Identity Server
 WSO2_IS_URL = os.getenv("WSO2_IS_URL", "https://wso2is:9444")
-OIDC_ISSUER = os.getenv("OIDC_ISSUER", f"{WSO2_IS_URL}/oauth2/token")
+OIDC_ISSUER = os.getenv("OIDC_ISSUER", "https://localhost:9444/oauth2/token")
 
 
 @lru_cache(maxsize=1)
