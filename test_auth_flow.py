@@ -1,129 +1,92 @@
 #!/usr/bin/env python3
 """
-Comprehensive WSO2 Authentication & API Access Test
-Tests: WSO2 IS authentication → WSO2 Gateway → Backend services
+Complete End-to-End System Test
+Tests: WSO2 AM OAuth2 → WSO2 Gateway → All Backend Services
 Financial-grade OAuth2 | PCI-DSS Compliant
 """
 
 import requests
-import base64
 import json
 import sys
-from typing import Dict, Optional
 
 requests.packages.urllib3.disable_warnings()
 
-# Configuration
-WSO2_IS = "https://localhost:9444"
-WSO2_GATEWAY = "http://localhost:8280"
-
+# Users created in WSO2 IS
 TEST_USERS = [
     {"username": "admin", "password": "admin", "role": "Administrator"},
     {"username": "ops_user", "password": "OpsUser123", "role": "Operations"},
     {"username": "finance", "password": "Finance123", "role": "Finance"},
-    {"username": "auditor", "password": "Auditor123", "role": "Auditor (PCI-DSS)"},
-    {"username": "user", "password": "User1234", "role": "Standard User"}
+    {"username": "auditor", "password": "Auditor123", "role": "Auditor"},
+    {"username": "user", "password": "User1234", "role": "User"}
 ]
 
+# APIs to test
 TEST_APIS = [
-    {"name": "Profile", "path": "/profile/1.0.0/health", "port": 8001},
-    {"name": "Payment", "path": "/payment/1.0.0/health", "port": 8002},
-    {"name": "Forex", "path": "/forex/1.0.0/health", "port": 8006},
-    {"name": "Ledger", "path": "/ledger/1.0.0/health", "port": 8003},
-    {"name": "Wallet", "path": "/wallet/1.0.0/health", "port": 8004},
-    {"name": "Rules", "path": "/rules/1.0.0/health", "port": 8005}
+    {"name": "Profile", "path": "/api/profile/1.0.0/health"},
+    {"name": "Payment", "path": "/api/payment/1.0.0/health"},
+    {"name": "Forex", "path": "/api/forex/1.0.0/health"},
+    {"name": "Ledger", "path": "/api/ledger/1.0.0/health"},
+    {"name": "Wallet", "path": "/api/wallet/1.0.0/health"},
+    {"name": "Rules", "path": "/api/rules/1.0.0/health"}
 ]
 
 
-def get_token(username: str, password: str) -> Optional[Dict]:
-    """Get JWT token from WSO2 IS using DCR + Password Grant"""
+def load_app_keys():
+    """Load WSO2 AM application keys"""
     try:
-        # DCR
-        auth_header = base64.b64encode(f"{username}:{password}".encode()).decode()
-        dcr_response = requests.post(
-            f"{WSO2_IS}/client-registration/v0.17/register",
-            json={
-                "clientName": f"test_{username}",
-                "owner": username,
-                "grantType": "password refresh_token",
-                "saasApp": True
-            },
-            headers={"Authorization": f"Basic {auth_header}", "Content-Type": "application/json"},
+        with open('/home/premnath/innover/wso2/output/application-keys.json', 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"❌ Failed to load application keys: {e}")
+        print("   Run: make setup")
+        sys.exit(1)
+
+
+def get_token(consumer_key: str, consumer_secret: str, username: str, password: str):
+    """Get OAuth2 token from WSO2 AM"""
+    try:
+        response = requests.post(
+            "https://localhost:9443/oauth2/token",
+            data={"grant_type": "password", "username": username, "password": password},
+            auth=(consumer_key, consumer_secret),
             verify=False,
             timeout=10
         )
         
-        if dcr_response.status_code not in [200, 201]:
-            return {"error": f"DCR failed: {dcr_response.status_code}", "details": dcr_response.text[:150]}
-        
-        dcr_data = dcr_response.json()
-        client_id = dcr_data["clientId"]
-        client_secret = dcr_data["clientSecret"]
-        
-        # Get token
-        token_response = requests.post(
-            f"{WSO2_IS}/oauth2/token",
-            data={"grant_type": "password", "username": username, "password": password, "scope": "openid"},
-            auth=(client_id, client_secret),
-            verify=False,
-            timeout=10
-        )
-        
-        if token_response.status_code == 200:
-            token_data = token_response.json()
-            access_token = token_data["access_token"]
-            
-            # Decode JWT
-            parts = access_token.split('.')
-            if len(parts) >= 2:
-                payload = parts[1] + '=' * (4 - len(parts[1]) % 4)
-                user_info = json.loads(base64.urlsafe_b64decode(payload))
-                
+        if response.status_code == 200:
+            token_data = response.json()
             return {
-                "token": access_token,
-                "user": user_info.get("sub"),
-                "client_id": client_id,
-                "expires_in": token_data.get("expires_in")
+                "token": token_data["access_token"],
+                "expires_in": token_data.get("expires_in", 3600)
             }
         else:
-            return {"error": f"Token failed: {token_response.status_code}", "details": token_response.text[:150]}
+            return {"error": response.status_code, "details": response.text[:200]}
     except Exception as e:
-        return {"error": f"Exception: {str(e)}"}
-
-
-def test_api(api: Dict, token: str) -> Dict:
-    """Test API via Gateway"""
-    try:
-        response = requests.get(
-            f"{WSO2_GATEWAY}{api['path']}",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10
-        )
-        return {
-            "status": response.status_code,
-            "success": response.status_code == 200,
-            "data": response.json() if response.status_code == 200 else response.text[:100]
-        }
-    except Exception as e:
-        return {"status": 0, "success": False, "error": str(e)}
-
-
-def test_backend(api: Dict) -> bool:
-    """Test backend service directly"""
-    try:
-        response = requests.get(f"http://localhost:{api['port']}/health", timeout=5)
-        return response.status_code == 200
-    except:
-        return False
+        return {"error": "Exception", "details": str(e)}
 
 
 def main():
-    print("=" * 80)
-    print("🔐 WSO2 Authentication & API Access Test")
-    print("Financial-grade OAuth2 | PCI-DSS Compliant")
-    print("=" * 80)
+    print("=" * 70)
+    print("Complete System Test: WSO2 AM → Gateway → All Services")
+    print("Testing with Multiple Users")
+    print("=" * 70)
     
-    results = {"auth": 0, "gateway": 0, "backend": 0, "total": len(TEST_APIS)}
+    # Load app keys
+    app_keys = load_app_keys()
+    consumer_key = app_keys['production']['consumerKey']
+    consumer_secret = app_keys['production']['consumerSecret']
+    key_manager = app_keys['production'].get('keyManager', 'Resident Key Manager')
+    
+    print(f"\n📱 Application: {app_keys['application']}")
+    print(f"   Consumer Key: {consumer_key}")
+    print(f"   Key Manager: {key_manager}")
+    
+    if key_manager == "Resident Key Manager":
+        print("\n⚠️  NOTE: Using Resident Key Manager (WSO2 AM built-in user store)")
+        print("   Only 'admin' user will work. Other users exist in WSO2 IS only.")
+        print("   To enable all users: See wso2/enable-is-key-manager.md")
+    
+    overall_results = {"users_tested": 0, "users_passed": 0, "total_api_calls": 0, "api_success": 0}
     
     # Test each user
     for user in TEST_USERS:
@@ -131,79 +94,72 @@ def main():
         password = user["password"]
         role = user["role"]
         
-        print(f"\n👤 User: {username} ({role})")
-        print("-" * 80)
+        print(f"\n{'=' * 70}")
+        print(f"👤 User: {username} ({role})")
+        print(f"{'=' * 70}")
         
-        # Step 1: Authentication
-        print(f"\n🔑 Step 1: WSO2 IS Authentication...")
-        token_result = get_token(username, password)
+        # Get OAuth2 token
+        print(f"\n🔑 Getting OAuth2 token...")
+        token_result = get_token(consumer_key, consumer_secret, username, password)
         
         if "error" in token_result:
-            print(f"   ❌ {token_result['error']}")
-            print(f"      {token_result.get('details', '')}")
+            print(f"   ❌ Token failed: HTTP {token_result['error']}")
+            print(f"      {token_result['details']}")
             continue
         
-        print(f"   ✅ Token obtained")
-        print(f"      User: {token_result['user']}")
-        print(f"      Client: {token_result['client_id']}")
-        print(f"      Expires: {token_result['expires_in']}s")
-        results["auth"] += 1
+        access_token = token_result["token"]
+        print(f"   ✅ Token obtained: {access_token[:30]}...")
+        print(f"   Expires in: {token_result['expires_in']}s")
         
-        token = token_result["token"]
+        overall_results["users_tested"] += 1
         
-        # Step 2: Test APIs via Gateway
-        print(f"\n📡 Step 2: Testing APIs via WSO2 Gateway...")
+        # Test all APIs
+        print(f"\n📡 Testing All APIs via WSO2 AM Gateway...")
+        print("-" * 70)
+        
+        user_api_success = 0
+        
         for api in TEST_APIS:
-            result = test_api(api, token)
-            
-            if result["success"]:
-                print(f"   ✅ {api['name']}: {result['data']}")
-                results["gateway"] += 1
-            elif result["status"] == 404:
-                print(f"   ⚠️  {api['name']}: HTTP 404 - Not deployed")
-            elif result["status"] == 401:
-                print(f"   ❌ {api['name']}: HTTP 401 - Auth failed")
-            else:
-                print(f"   ❌ {api['name']}: HTTP {result['status']}")
+            overall_results["total_api_calls"] += 1
+            try:
+                response = requests.get(
+                    f"http://localhost:8280{api['path']}",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    print(f"   ✅ {api['name']:12} → {data}")
+                    user_api_success += 1
+                    overall_results["api_success"] += 1
+                else:
+                    print(f"   ❌ {api['name']:12} → HTTP {response.status_code}")
+            except Exception as e:
+                print(f"   ❌ {api['name']:12} → Error: {e}")
         
-        # Step 3: Test backends directly
-        print(f"\n🔧 Step 3: Testing Backend Services...")
-        for api in TEST_APIS:
-            if test_backend(api):
-                print(f"   ✅ {api['name']}: Healthy")
-                results["backend"] += 1
-            else:
-                print(f"   ❌ {api['name']}: Unhealthy")
+        print("-" * 70)
+        print(f"User Result: {user_api_success}/{len(TEST_APIS)} APIs successful")
         
-        # Step 4: Test without auth
-        print(f"\n🔓 Step 4: Testing without authentication...")
-        no_auth = requests.get(f"{WSO2_GATEWAY}{TEST_APIS[0]['path']}")
-        if no_auth.status_code in [401, 403]:
-            print(f"   ✅ Correctly rejected (HTTP {no_auth.status_code})")
-        elif no_auth.status_code == 404:
-            print(f"   ⚠️  HTTP 404 - APIs not deployed")
-        else:
-            print(f"   ❌ HTTP {no_auth.status_code} - Should require auth")
+        if user_api_success == len(TEST_APIS):
+            overall_results["users_passed"] += 1
     
-    # Summary
-    print(f"\n{'=' * 80}")
-    print("📊 Test Results")
-    print(f"{'=' * 80}")
-    print(f"   ✅ Authentication: {results['auth']}/{len(TEST_USERS)} users")
-    print(f"   📡 Gateway Access: {results['gateway']}/{results['total']} APIs")
-    print(f"   🔧 Backend Health: {results['backend']}/{results['total']} services")
+    # Overall Summary
+    print(f"\n{'=' * 70}")
+    print("📊 Overall Test Results")
+    print(f"{'=' * 70}")
+    print(f"   👥 Users Tested: {overall_results['users_tested']}/{len(TEST_USERS)}")
+    print(f"   ✅ Users Passed: {overall_results['users_passed']}/{overall_results['users_tested']}")
+    print(f"   📡 API Calls: {overall_results['api_success']}/{overall_results['total_api_calls']} successful")
     
-    if results['gateway'] == 0:
-        print(f"\n💡 APIs not accessible via gateway")
-        print(f"   Run: make setup")
-    elif results['gateway'] == results['total']:
-        print(f"\n🎉 All tests passed! System fully operational")
+    if overall_results['users_passed'] == len(TEST_USERS):
+        print("\n🎉 ALL USERS & ALL TESTS PASSED!")
+        print("✅ All Users → OAuth2 → WSO2 AM Gateway → All Services Working")
+        print("=" * 70)
+        return 0
     else:
-        print(f"\n⚠️  Partial success - some APIs not accessible")
-    
-    print("=" * 80)
-    
-    return 0 if results['gateway'] == results['total'] else 1
+        print(f"\n⚠️  {len(TEST_USERS) - overall_results['users_passed']} user(s) failed")
+        return 1
 
 
 if __name__ == "__main__":

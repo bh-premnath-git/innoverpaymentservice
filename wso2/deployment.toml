@@ -29,26 +29,18 @@ type = "WSO2-IS"
 display_name = "WSO2 Identity Server"
 description = "Financial-grade Identity Server for PCI-DSS compliance"
 enabled = true
-is_default = true
 
 [apim.key_manager.configuration]
 ServerURL = "https://wso2is:9443/services/"
-Username = "${admin.username}"
-Password = "${admin.password}"
-TokenURL = "https://wso2is:9443/oauth2/token"
-RevokeURL = "https://wso2is:9443/oauth2/revoke"
-IntrospectURL = "https://wso2is:9443/oauth2/introspect"
-UserInfoURL = "https://wso2is:9443/oauth2/userinfo"
-AuthorizeURL = "https://wso2is:9443/oauth2/authorize"
-TokenValidation = "INTROSPECT"
-ClaimConfiguration = "use_user_store_as_claim_dialect"
-WellKnownEndpoint = "https://wso2is:9443/oauth2/.well-known/openid-configuration"
-Issuer = "https://wso2is:9443/oauth2/token"
-JWKSEndpoint = "https://wso2is:9443/oauth2/jwks"
-ConsumerKeyClaim = "azp"
-ScopesClaim = "scope"
-Audience = "wso2am"
-KeyManagerClientConfiguration = "{\"GrantTypes\": [\"password\", \"client_credentials\", \"refresh_token\", \"urn:ietf:params:oauth:grant-type:jwt-bearer\"]}"
+username = "admin"
+password = "admin"
+token_endpoint = "https://wso2is:9443/oauth2/token"
+revoke_endpoint = "https://wso2is:9443/oauth2/revoke"
+introspection_endpoint = "https://wso2is:9443/oauth2/introspect"
+userinfo_endpoint = "https://wso2is:9443/oauth2/userinfo"
+authorize_endpoint = "https://wso2is:9443/oauth2/authorize"
+scope_management_endpoint = "https://wso2is:9443/api/identity/oauth2/v1.0/scopes"
+available_grant_types = ["authorization_code","password","client_credentials","refresh_token"]
 
 # JWT Token Validation - WSO2 IS Integration
 [apim.jwt]

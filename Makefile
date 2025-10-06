@@ -141,10 +141,9 @@ wso2-enable-km:
 publish-apis:
 	@docker compose run --rm wso2-setup
 
-# Test complete authentication flow
+# Test complete end-to-end flow
 test:
-	@echo "=== Testing WSO2 Authentication & API Access ==="
-	@echo "WSO2 IS → Gateway → Backend Services"
+	@echo "=== Testing Complete System: OAuth2 → WSO2 AM → All APIs ==="
 	python3 test_auth_flow.py
 
 # Help
