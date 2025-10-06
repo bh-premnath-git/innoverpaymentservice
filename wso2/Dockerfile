@@ -6,11 +6,10 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy setup scripts
+# Copy setup script
 COPY setup.py /app/setup.py
-COPY configure-keycloak-km.py /app/configure-keycloak-km.py
 
 RUN chmod +x /app/*.py
 
-# Default entrypoint (use setup.py for WSO2 4.5.0)
+# WSO2 IS & APIM auto-connect - just setup APIs
 ENTRYPOINT ["python3", "/app/setup.py"]

@@ -672,49 +672,29 @@ def load_api_config(config_file: str) -> Dict:
         return yaml.safe_load(f)
 
 
-def wait_for_keycloak_ready(keycloak_issuer: str, max_attempts: int = 80):
-    """Wait for Keycloak to be FULLY ready (not just healthy)"""
-    print("⏳ Waiting for Keycloak to be FULLY initialized...")
+def wait_for_wso2is_ready(wso2is_host: str, max_attempts: int = 60):
+    """Wait for WSO2 IS to be ready (optional - it auto-connects with APIM)"""
+    print("⏳ Waiting for WSO2 Identity Server...")
     
-    # Extract base URL from issuer
-    base_url = keycloak_issuer.rsplit('/realms/', 1)[0]
-    realm = keycloak_issuer.rsplit('/realms/', 1)[1] if '/realms/' in keycloak_issuer else 'innover'
-    token_url = f"{base_url}/realms/{realm}/protocol/openid-connect/token"
-    
-    # Step 1: Wait for Keycloak to respond
-    print("   Step 1/2: Waiting for Keycloak service...")
     for attempt in range(max_attempts):
         try:
-            # Try to get a token with admin credentials (verifies users are created)
-            response = requests.post(
-                token_url,
-                data={
-                    'client_id': 'admin-cli',
-                    'username': 'admin',
-                    'password': os.getenv('KC_BOOTSTRAP_ADMIN_PASSWORD', 'admin'),
-                    'grant_type': 'password'
-                },
+            response = requests.get(
+                f"{wso2is_host}/carbon/admin/login.jsp",
                 verify=False,
                 timeout=5
             )
             if response.status_code == 200:
-                print("   ✓ Keycloak is responding and users are created")
-                break
+                print("   ✓ WSO2 IS is ready")
+                return True
         except Exception:
             pass
         
         if attempt % 6 == 0:
             print(f"      Checking... ({attempt + 1}/{max_attempts})")
         time.sleep(5)
-    else:
-        print("   ⚠️  Keycloak check timed out, proceeding anyway...")
-        return False
     
-    # Step 2: Final stability wait
-    print("   Step 2/2: Waiting for Keycloak to stabilize...")
-    time.sleep(10)
-    print("✓ Keycloak is FULLY ready")
-    return True
+    print("   ⚠️  WSO2 IS check timed out, proceeding anyway...")
+    return False
 
 
 def main():
@@ -725,13 +705,13 @@ def main():
     
     # Environment variables
     wso2_host = os.getenv("WSO2_HOST", "https://wso2am:9443")
+    wso2is_host = os.getenv("WSO2_IS_HOST", "https://wso2is:9444")
     wso2_username = os.getenv("WSO2_ADMIN_USERNAME", "admin")
     wso2_password = os.getenv("WSO2_ADMIN_PASSWORD", "admin")
     config_file = os.getenv("API_CONFIG_FILE", "/config/api-config.yaml")
-    keycloak_issuer = os.getenv("KEYCLOAK_ISSUER", "https://auth.127.0.0.1.sslip.io/realms/innover")
     
-    # Wait for Keycloak to be fully ready first
-    wait_for_keycloak_ready(keycloak_issuer)
+    # Wait for WSO2 IS to be ready (optional - WSO2 IS & APIM auto-connect)
+    wait_for_wso2is_ready(wso2is_host)
     
     # Create client
     client = WSO2APIManager(wso2_host, wso2_username, wso2_password)

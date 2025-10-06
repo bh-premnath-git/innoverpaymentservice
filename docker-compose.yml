@@ -1,6 +1,6 @@
 x-svc-env: &svc_env
-  # We'll override OIDC_ISSUER per service to the sslip URL; keep defaults here safe.
-  OIDC_ISSUER: ${OIDC_ISSUER:-http://keycloak:8080/realms/innover}
+  # OIDC configuration for WSO2 Identity Server (Financial-grade OAuth2)
+  OIDC_ISSUER: ${OIDC_ISSUER:-https://wso2is:9444/oauth2/token}
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-wso2am}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
   REDIS_PASSWORD: ${REDIS_PASSWORD:-redis-secret}
@@ -44,32 +44,30 @@ networks:
 
 services:
   wso2is:
-    image: wso2/wso2is:7.1.0-alpine
+    build:
+      context: ./wso2is
     environment:
       <<: *svc_env
-      # Java truststore for TLS
-      JAVA_OPTS: "-Djavax.net.ssl.trustStore=/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
+      # Admin credentials for user initialization
+      WSO2_IS_ADMIN_USERNAME: ${WSO2_IS_ADMIN_USERNAME:-admin}
+      WSO2_IS_ADMIN_PASSWORD: ${WSO2_IS_ADMIN_PASSWORD:-admin}
     ports:
       - "9444:9444"  # HTTPS port for Identity Server
     volumes:
       - wso2is-data:/home/wso2carbon/wso2is-7.1.0/repository
       - ./wso2is/deployment.toml:/home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml:ro
-      - ./nginx/certs:/certs:ro
     extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-check-certificate --spider --quiet https://localhost:9444/carbon/admin/login.jsp || exit 1"]
+      test: ["CMD-SHELL", "curl -k -sf https://localhost:9444/carbon/admin/login.jsp || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 30
-      start_period: 180s
+      start_period: 240s  # Increased for user initialization
     deploy:
       resources:
         limits:
           cpus: "1.50"
           memory: 1.5G
-    depends_on:
-      truststore-setup:
-        condition: service_completed_successfully
     restart: unless-stopped
     networks: [edge]
 
@@ -77,9 +75,7 @@ services:
     image: wso2/wso2am:4.5.0-alpine
     environment:
       <<: *svc_env
-      OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.127.0.0.1.sslip.io/realms/innover}
-      # CRITICAL: Java truststore for JWKS endpoint validation
-      JAVA_OPTS: "-Djavax.net.ssl.trustStore=/certs/truststore.jks -Djavax.net.ssl.trustStorePassword=changeit"
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://wso2is:9444/oauth2/token}
     ports:
       - "8280:8280"
       - "8243:8243"
@@ -87,7 +83,6 @@ services:
     volumes:
       - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
       - ./wso2/deployment.toml:/home/wso2carbon/wso2am-4.5.0/repository/conf/deployment.toml:ro
-      - ./nginx/certs:/certs:ro  # Mount certificates for TLS trust
     extra_hosts: *extra_hosts
     healthcheck:
       test: ["CMD-SHELL", "wget --no-check-certificate --spider --quiet https://localhost:9443/services/Version || exit 1"]
@@ -99,55 +94,30 @@ services:
     depends_on:
       wso2is:
         condition: service_healthy  # Wait for WSO2 IS to be fully ready
-      truststore-setup:
-        condition: service_completed_successfully  # Ensure truststore exists
     restart: unless-stopped
     networks: [edge]
 
-  mkcert-setup:
-    image: alpine:latest
-    container_name: mkcert-setup
-    volumes:
-      - ./nginx/certs:/certs
-      - ./scripts/init-mkcert.sh:/init-mkcert.sh:ro
+  # mkcert-setup: NOT NEEDED
+  # WSO2 IS has built-in certificates (wso2carbon.p12)
+  
+  # nginx: NOT NEEDED
+  # Only needed for Keycloak issuer consistency
+  # WSO2 IS can be accessed directly at localhost:9444
+
+  wso2is-init:
+    build:
+      context: ./wso2is
+    container_name: wso2is-init
     environment:
-      - DOMAINS=${AUTH_HOSTNAME:-auth.127.0.0.1.sslip.io},localhost,127.0.0.1
-    command: ["/bin/sh", "/init-mkcert.sh"]
-    deploy: *light_deploy
+      WSO2_IS_ADMIN_USERNAME: ${WSO2_IS_ADMIN_USERNAME:-admin}
+      WSO2_IS_ADMIN_PASSWORD: ${WSO2_IS_ADMIN_PASSWORD:-admin}
+    entrypoint: ["/bin/bash", "/home/wso2carbon/create-users.sh"]
+    depends_on:
+      wso2is:
+        condition: service_healthy
+    extra_hosts: *extra_hosts
     restart: "no"
     networks: [edge]
-
-  truststore-setup:
-    image: openjdk:11-jre-slim
-    container_name: truststore-setup
-    volumes:
-      - ./nginx/certs:/certs
-      - ./scripts/create-truststore.sh:/create-truststore.sh:ro
-    command: ["/bin/sh", "/create-truststore.sh"]
-    depends_on:
-      mkcert-setup:
-        condition: service_completed_successfully
-    deploy: *light_deploy
-    restart: "no"
-    networks: [edge]
-
-  nginx:
-    image: nginx:1.27-alpine
-    depends_on:
-      - wso2is
-      - mkcert-setup
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
-    networks:
-      edge:
-        aliases:
-          # Containers will resolve these hostnames to the Nginx container
-          - ${AUTH_HOSTNAME:-auth.127.0.0.1.sslip.io}
-    restart: unless-stopped
 
   wso2-setup:
     build:
@@ -166,8 +136,8 @@ services:
     depends_on:
       wso2am:
         condition: service_started  # setup.py has built-in retry logic
-      wso2is:
-        condition: service_healthy
+      wso2is-init:
+        condition: service_completed_successfully
     extra_hosts: *extra_hosts
     restart: "no"
     networks: [edge]

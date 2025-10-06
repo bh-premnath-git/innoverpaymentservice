@@ -53,10 +53,13 @@ proto:
 
 # Show all service URLs
 urls:
-	@echo "=== Service URLs ==="
-	@echo "Keycloak Admin:  http://localhost:8081 (admin/admin)"
-	@echo "WSO2 Admin:      https://localhost:9443/carbon (admin/admin)"
+	@echo "=== Service URLs (Financial Platform) ==="
+	@echo "WSO2 IS Admin:   https://localhost:9444/carbon (admin/admin)"
+	@echo "WSO2 IS OAuth2:  https://auth.127.0.0.1.sslip.io"
+	@echo "WSO2 APIM Admin: https://localhost:9443/carbon (admin/admin)"
 	@echo "WSO2 Dev Portal: https://localhost:9443/devportal"
+	@echo "API Gateway:     http://localhost:8280 (HTTP)"
+	@echo "API Gateway:     https://localhost:8243 (HTTPS)"
 	@echo "Jaeger UI:       http://localhost:16686"
 	@echo "CockroachDB UI:  http://localhost:8082"
 	@echo "Redis:           localhost:6379"
@@ -93,18 +96,10 @@ db-shell:
 
 # Manual setup (if wso2-setup container fails or for re-configuration)
 setup:
-	@echo "Running manual WSO2 setup..."
+	@echo "Running manual WSO2 APIM + IS setup..."
+	@docker compose run --rm wso2-setup
 	@echo ""
-	@echo "Configuring Keycloak Key Manager..."
-	python3 wso2/configure-keycloak.py
-	@echo ""
-	@echo "Publishing APIs to WSO2..."
-	python3 wso2/wso2-publisher-from-config.py
-	@echo ""
-	@echo "Creating Application (Service Provider)..."
-	python3 wso2/create-application.py
-	@echo ""
-	@echo "Setup complete!"
+	@echo "✅ Setup complete! WSO2 IS and APIM configured."
 
 # Check WSO2 setup status
 setup-status:
@@ -113,33 +108,51 @@ setup-status:
 
 # Publish APIs to WSO2
 publish-apis:
-	python3 wso2/wso2-publisher-from-config.py
+	@docker compose run --rm wso2-setup
 
-{{ ... }}
-configure-keycloak:
-	@echo "=== Configuring Keycloak Integration with WSO2 ==="
-	@pip install -q requests 2>/dev/null || echo "Installing dependencies..."
+# Test WSO2 IS authentication
+test-auth:
+	@echo "=== Testing WSO2 IS Authentication ==="
+	python3 test_wso2_auth.py
+
+# Test complete flow (WSO2 IS → APIM Gateway → Backend)
+test-flow:
+	@echo "=== Testing Complete Authentication Flow ==="
+	python3 test_complete_flow.py
 
 # Help
 help:
-	@echo "Available targets:"
-	@echo "  make up              - Start all services"
+	@echo "=== Available Targets (Financial Platform) ==="
+	@echo ""
+	@echo "Service Management:"
+	@echo "  make up              - Start all services (WSO2 IS + APIM)"
 	@echo "  make down            - Stop and remove containers"
 	@echo "  make nuke            - Remove everything (containers, volumes, images)"
 	@echo "  make rebuild         - Rebuild all images without cache"
 	@echo "  make restart-<svc>   - Restart specific service"
+	@echo ""
+	@echo "Monitoring:"
 	@echo "  make ps              - Show container status"
 	@echo "  make health          - Show health status of all containers"
 	@echo "  make logs            - Tail logs from all services"
 	@echo "  make logs-<svc>      - Tail logs from specific service"
-	@echo "  make urls            - Show all service URLs"
+	@echo "  make urls            - Show all service URLs (WSO2 IS, APIM, etc.)"
+	@echo ""
+	@echo "Testing:"
 	@echo "  make smoke-test      - Run comprehensive smoke tests"
+	@echo "  make test-auth       - Test WSO2 IS authentication"
+	@echo "  make test-flow       - Test complete flow (IS → Gateway → Backend)"
 	@echo "  make workers         - Show Celery worker status"
 	@echo "  make test-worker-<svc> - Send test task to worker"
+	@echo ""
+	@echo "Setup & Configuration:"
+	@echo "  make setup           - Run manual WSO2 setup"
+	@echo "  make setup-status    - Check WSO2 setup status"
+	@echo "  make publish-apis    - Publish all APIs to WSO2 API Manager"
+	@echo ""
+	@echo "Development:"
 	@echo "  make proto           - Generate protobuf files"
 	@echo "  make db-shell        - Open CockroachDB SQL shell"
 	@echo "  make redis-cli       - Open Redis CLI"
 	@echo "  make kafka-topics    - List Kafka topics"
-	@echo "  make publish-apis    - Publish all APIs to WSO2 API Manager"
-	@echo "  make configure-keycloak - Configure Keycloak as Key Manager in WSO2"
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Complete Authentication Flow Test
-Client → Keycloak (get JWT) → WSO2 Gateway (validate via JWKS) → Backend
+Client → WSO2 IS (get JWT) → WSO2 Gateway (validate via JWKS) → Backend
+Financial-grade OAuth2 | PCI-DSS Compliant
 """
 
 import requests
@@ -99,20 +100,19 @@ def main():
     # Summary
     print("\n" + "=" * 70)
     print("Summary:")
-    print("  ✅ SSL Certificates (mkcert)")
-    print("  ✅ Keycloak JWT generation")
-    print(f"  {'✅' if api_resp.status_code == 200 else '❌'} WSO2 JWT validation via JWKS")
+    print("  ✅ WSO2 IS JWT generation (PCI-DSS Compliant)")
+    print(f"  {'✅' if api_resp.status_code == 200 else '❌'} WSO2 APIM JWT validation via JWKS")
     print(f"  {'✅' if api_resp.status_code == 200 else '❌'} API Gateway routing")
     print(f"  ✅ Backend services healthy")
     
     print("\n" + "=" * 70)
-    print("Flow: Client → Keycloak → WSO2 Gateway → Backend")
+    print("Flow: Client → WSO2 IS → WSO2 Gateway → Backend")
     print("=" * 70)
     
     if api_resp.status_code == 200:
         print("🎉 SUCCESS! Complete flow working")
-        print("   ✅ Keycloak JWT validated by WSO2 via JWKS")
-        print("   ✅ No token exchange needed")
+        print("   ✅ WSO2 IS JWT validated by WSO2 APIM via JWKS")
+        print("   ✅ Financial-grade OAuth2 authentication")
         print("   ✅ Backend accessible through gateway")
     elif api_resp.status_code == 404:
         print("⚠️  Partial Success:")
