@@ -1,5 +1,4 @@
 x-svc-env: &svc_env
-  # OIDC configuration for WSO2 Identity Server (Financial-grade OAuth2)
   OIDC_ISSUER: ${OIDC_ISSUER:-https://localhost:9444/oauth2/token}
   OIDC_AUDIENCE: ${OIDC_AUDIENCE:-wso2am}
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
@@ -96,13 +95,6 @@ services:
         condition: service_healthy  # Wait for WSO2 IS to be fully ready
     restart: unless-stopped
     networks: [edge]
-
-  # mkcert-setup: NOT NEEDED
-  # WSO2 IS has built-in certificates (wso2carbon.p12)
-  
-  # nginx: NOT NEEDED
-  # Only needed for Keycloak issuer consistency
-  # WSO2 IS can be accessed directly at localhost:9444
 
   wso2is-init:
     build:

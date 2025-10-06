@@ -65,7 +65,7 @@ def extract_user_info(claims: Dict[str, Any]) -> Optional[Dict[str, Any]]:
                 break
 
     if not email and isinstance(username, dict):
-        email = username.get("email") if isinstance(username, dict) else None
+        email = username.get("email")
 
     if not username and email:
         username = email.split("@")[0]
