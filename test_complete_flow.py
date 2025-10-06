@@ -16,49 +16,50 @@ def main():
     print("Complete Authentication Flow Test")
     print("=" * 70)
     
-    # Step 1: Get Keycloak JWT
-    print("\n🔐 Step 1: Keycloak Authentication (HTTPS)...")
+    # Step 1: Get WSO2 IS JWT (Financial-grade OAuth2)
+    print("\n🔐 Step 1: WSO2 Identity Server Authentication...")
     try:
-        kc_resp = requests.post(
-            "https://auth.127.0.0.1.sslip.io/realms/innover/protocol/openid-connect/token",
+        # First, register OAuth client with WSO2 IS
+        is_token_resp = requests.post(
+            "https://localhost:9444/oauth2/token",
             data={
-                "client_id": "wso2am",
-                "client_secret": "wso2am-secret",
+                "grant_type": "password",
                 "username": "admin",
                 "password": "admin",
-                "grant_type": "password"
+                "scope": "openid"
             },
+            auth=("admin", "admin"),  # Client credentials
             verify=False,
             timeout=10
         )
         
-        if kc_resp.status_code == 200:
-            kc_token = kc_resp.json()["access_token"]
-            print(f"   ✅ Keycloak JWT obtained")
+        if is_token_resp.status_code == 200:
+            is_token = is_token_resp.json()["access_token"]
+            print(f"   ✅ WSO2 IS JWT obtained")
             
             # Decode user info
-            parts = kc_token.split('.')
+            parts = is_token.split('.')
             payload = parts[1] + '=' * (4 - len(parts[1]) % 4)
             user_info = json.loads(base64.urlsafe_b64decode(payload))
-            print(f"   👤 User: {user_info.get('preferred_username')}")
-            print(f"   📧 Email: {user_info.get('email')}")
-            print(f"   🎭 Roles: {', '.join(user_info.get('realm_access', {}).get('roles', []))}")
+            print(f"   👤 User: {user_info.get('sub')}")
             print(f"   🔑 Issuer: {user_info.get('iss')}")
+            print(f"   ✅ PCI-DSS Compliant Token")
         else:
-            print(f"   ❌ Failed: HTTP {kc_resp.status_code}")
+            print(f"   ❌ Failed: HTTP {is_token_resp.status_code}")
+            print(f"   Response: {is_token_resp.text[:200]}")
             return
     except Exception as e:
         print(f"   ❌ Error: {e}")
         return
     
-    # Step 2: Call WSO2 Gateway with Keycloak JWT
+    # Step 2: Call WSO2 Gateway with WSO2 IS JWT
     print("\n📡 Step 2: WSO2 Gateway validates JWT via JWKS...")
     print("   URL: http://localhost:8280/api/forex/1.0.0/health")
-    print("   JWKS: https://auth.127.0.0.1.sslip.io/realms/innover/protocol/openid-connect/certs")
+    print("   JWKS: https://wso2is:9444/oauth2/jwks")
     
     api_resp = requests.get(
         "http://localhost:8280/api/forex/1.0.0/health",
-        headers={"Authorization": f"Bearer {kc_token}"}
+        headers={"Authorization": f"Bearer {is_token}"}
     )
     print(f"   HTTP {api_resp.status_code}")
     

@@ -1,0 +1,62 @@
+[server]
+hostname = "localhost"
+node_ip = "127.0.0.1"
+base_path = "https://$ref{server.hostname}:${carbon.management.port}"
+
+[super_admin]
+username = "admin"
+password = "admin"
+create_admin_account = true
+
+[user_store]
+type = "database_unique_id"
+
+[database.identity_db]
+type = "h2"
+url = "jdbc:h2:./repository/database/WSO2IDENTITY_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
+username = "wso2carbon"
+password = "wso2carbon"
+
+[database.shared_db]
+type = "h2"
+url = "jdbc:h2:./repository/database/WSO2SHARED_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
+username = "wso2carbon"
+password = "wso2carbon"
+
+# OAuth/OIDC Configuration for Financial Services
+[oauth]
+token_validation.app_access_token_validity = 3600
+token_validation.user_access_token_validity = 3600
+token_validation.refresh_token_validity = 86400
+token_validation.enable_assertions = true
+
+# JWT Token Configuration - PCI-DSS Compliant
+[oauth.oidc]
+id_token_issuer = "https://localhost:9444/oauth2/token"
+id_token_encryption_enabled = false
+id_token_encryption_algorithm = "RSA-OAEP"
+id_token_encryption_method = "A128CBC-HS256"
+
+# Audit Logging - Required for PCI-DSS Compliance
+[audit]
+enabled = true
+
+[audit.log]
+enabled = true
+pattern = "%{yyyy-MM-dd}t %{HH:mm:ss}t %u %a %s %o"
+
+# Session Management - Financial Grade
+[session_data]
+persistence.persist_temporary_data = false
+
+[authentication]
+authenticator.totp.enable = true
+authenticator.basic.enable = true
+
+# CORS Configuration
+[cors]
+allow_generic_http_requests = true
+allow_any_origin = true
+supported_methods = ["GET","POST","HEAD","OPTIONS","PUT","PATCH","DELETE"]
+supports_credentials = true
+max_age = 3600

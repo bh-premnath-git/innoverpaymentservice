@@ -336,6 +336,9 @@ class WSO2APIManager:
                         if isinstance(method_config, dict):
                             method_config["security"] = []
                             method_config["x-auth-type"] = "None"
+                            # Remove WSO2-specific security enforcement
+                            if "x-wso2-application-security" in method_config:
+                                del method_config["x-wso2-application-security"]
             
             # Remove global security requirement
             swagger["security"] = []
