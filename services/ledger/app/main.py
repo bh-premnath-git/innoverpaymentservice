@@ -1,7 +1,10 @@
 import os
 import base64
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+
+from services.common.auth import decode_token
+from services.common.userinfo import extract_user_info
 
 SERVICE_NAME = os.getenv("SERVICE_NAME", "svc-unknown")
 
@@ -40,19 +43,26 @@ def health(request: Request) -> dict:
         "status": "ok",
         "service": SERVICE_NAME
     }
-    
-    # Extract user info from custom headers (passed by backend/gateway)
-    user_email = request.headers.get("X-User-Email", "")
-    user_roles = request.headers.get("X-User-Roles", "")
-    user_name = request.headers.get("X-User-Name", "")
-    
-    if user_email or user_name:
-        response["user"] = {
-            "username": user_name or "unknown",
-            "email": user_email or "N/A",
-            "roles": user_roles.split(",") if user_roles else []
-        }
-    
+
+    jwt_payload = decode_jwt_header(request)
+    user_info = extract_user_info(jwt_payload)
+
+    if not user_info:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(" ", 1)[1]
+            try:
+                claims = decode_token(token)
+            except HTTPException:
+                claims = {}
+            except Exception:
+                claims = {}
+            else:
+                user_info = extract_user_info(claims)
+
+    if user_info:
+        response["user"] = user_info
+
     return response
 
 
