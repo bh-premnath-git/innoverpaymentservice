@@ -108,14 +108,57 @@ class WSO2APIManager:
             print(f"❌ Failed to get token: {token_response.status_code} - {token_response.text}")
             sys.exit(1)
     
-    def wait_for_ready(self, max_attempts: int = 80):
-        """Wait for WSO2 to be FULLY ready - not just healthy"""
+    def wait_for_ready(self, max_wait_seconds: Optional[int] = None):
+        """Wait for WSO2 to be FULLY ready - not just healthy.
+
+        The previous implementation relied on a fixed number of 10-second
+        sleep cycles which could easily exceed six minutes even when WSO2 had
+        already finished booting. This version converts the waiting logic to be
+        explicitly time-bound, uses shorter polling intervals, and allows the
+        timeout to be configured through the ``WSO2_MAX_WAIT_SECONDS``
+        environment variable. This keeps the overall wait predictable while
+        still breaking out as soon as the services respond.
+        """
+
+        if max_wait_seconds is None:
+            env_timeout = os.getenv("WSO2_MAX_WAIT_SECONDS")
+            try:
+                max_wait_seconds = int(env_timeout) if env_timeout else 420
+            except ValueError:
+                print(
+                    "⚠️  Invalid WSO2_MAX_WAIT_SECONDS value; falling back to 420 seconds"
+                )
+                max_wait_seconds = 420
+
+        # Use shorter polling intervals so we don't sleep unnecessarily long
+        service_interval = 5
+        publisher_interval = 5
+
+        # Split the overall timeout budget between the two main stages and a
+        # final short stabilization wait. Ensure we always have at least a few
+        # attempts even for small timeout values.
+        service_budget = max(int(max_wait_seconds * 0.5), service_interval * 3)
+        publisher_budget = max(int(max_wait_seconds * 0.35), publisher_interval * 3)
+        stabilization_budget = max_wait_seconds - service_budget - publisher_budget
+        stabilization_delay = max(0, min(20, stabilization_budget))
+
+        service_attempts = max(service_budget // service_interval, 1)
+        publisher_attempts = max(publisher_budget // publisher_interval, 1)
+
+        total_minutes = max_wait_seconds // 60
+        total_seconds_remainder = max_wait_seconds % 60
+        total_readable = (
+            f"{total_minutes} minute(s) {total_seconds_remainder} second(s)"
+            if total_minutes
+            else f"{max_wait_seconds} second(s)"
+        )
+
         print("⏳ Waiting for WSO2 API Manager to be FULLY ready...")
-        print(f"   This can take up to {max_attempts * 10 // 60} minutes on first start...")
-        
+        print(f"   Maximum wait time: {total_readable}")
+
         # Step 1: Wait for basic service to respond
         print("   Step 1/3: Waiting for WSO2 service...")
-        for attempt in range(max_attempts):
+        for attempt in range(service_attempts):
             try:
                 response = self.session.get(f"{self.host}/services/Version", timeout=5)
                 if response.status_code == 200:
@@ -123,19 +166,18 @@ class WSO2APIManager:
                     break
             except Exception:
                 pass
-            
-            if attempt % 6 == 0:
-                print(f"      Checking... ({attempt + 1}/{max_attempts})")
-            time.sleep(10)
+
+            if attempt % 4 == 0:
+                print(f"      Checking... ({attempt + 1}/{service_attempts})")
+            time.sleep(service_interval)
         else:
-            print("   ❌ WSO2 service did not start")
+            print("   ❌ WSO2 service did not start within the allocated time")
             sys.exit(1)
-        
+
         # Step 2: Wait for Publisher API to be fully ready
         print("   Step 2/3: Waiting for Publisher API...")
-        for attempt in range(40):
+        for attempt in range(publisher_attempts):
             try:
-                # Try to get access token first
                 token_response = self.session.post(
                     f"{self.host}/oauth2/token",
                     data={
@@ -148,11 +190,11 @@ class WSO2APIManager:
                     auth=(self.username, self.password),
                     timeout=10
                 )
-                
+
                 if token_response.status_code == 200:
                     token_data = token_response.json()
                     temp_token = token_data.get("access_token")
-                    
+
                     # Now verify Publisher API actually works with the token
                     api_response = self.session.get(
                         f"{self.publisher_api}/apis?limit=1",
@@ -162,20 +204,27 @@ class WSO2APIManager:
                     if api_response.status_code == 200:
                         print("   ✓ Publisher API is ready")
                         break
-            except Exception as e:
+                elif token_response.status_code in (400, 401, 403):
+                    print(
+                        "   ❌ Authentication failed while waiting for Publisher API"
+                    )
+                    print("   Please verify WSO2 credentials and try again")
+                    sys.exit(1)
+            except Exception:
                 pass
-            
-            if attempt % 6 == 0:
-                print(f"      Checking... ({attempt + 1}/40)")
-            time.sleep(10)
+
+            if attempt % 4 == 0:
+                print(f"      Checking... ({attempt + 1}/{publisher_attempts})")
+            time.sleep(publisher_interval)
         else:
-            print("   ❌ Publisher API failed to initialize properly")
+            print("   ❌ Publisher API failed to initialize within the allocated time")
             print("   This may indicate WSO2AM is not fully configured")
             sys.exit(1)
-        
+
         # Step 3: Final wait to ensure everything is stable
         print("   Step 3/3: Waiting for full initialization...")
-        time.sleep(20)
+        if stabilization_delay:
+            time.sleep(stabilization_delay)
         print("✓ WSO2 API Manager is FULLY ready")
         return True
     
