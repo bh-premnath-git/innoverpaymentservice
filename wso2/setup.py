@@ -35,7 +35,12 @@ class WSO2APIManager:
         
         # Token and registration endpoint
         self.token_endpoint = f"{self.host}/oauth2/token"
-        self.dcrEndpoint = f"{self.host}/client-registration/v0.17/register"
+
+        # WSO2 4.5.0 moved the DCR endpoint to v0.18 while older versions
+        # (including 4.1.x/4.4.x) still expose v0.17. Try the newest version
+        # first but keep a fallback list for older images so the setup script
+        # works across multiple docker-compose configurations.
+        self.dcr_versions = ["v0.18", "v0.17"]
         
         self.access_token = None
         
@@ -43,60 +48,99 @@ class WSO2APIManager:
         """Get OAuth2 access token using password grant"""
         print("🔑 Obtaining access token...")
         
-        # First, register a dynamic client for DCR
+        # First, register a dynamic client for DCR. The endpoint version
+        # differs between WSO2 releases so attempt each supported version until
+        # one responds successfully.
         auth_header = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
-        
+
         dcr_payload = {
             "clientName": "setup_client",
             "owner": self.username,
             "grantType": "password refresh_token",
             "saasApp": True
         }
-        
-        dcr_response = self.session.post(
-            self.dcrEndpoint,
-            json=dcr_payload,
-            headers={
-                "Authorization": f"Basic {auth_header}",
-                "Content-Type": "application/json"
-            }
-        )
-        
-        if dcr_response.status_code not in [200, 201]:
-            # Client might already exist, try password grant with admin-cli
-            print("⚠️  DCR failed, trying direct token endpoint...")
-            token_data = {
-                "grant_type": "password",
-                "username": self.username,
-                "password": self.password,
-                "scope": "apim:api_view apim:api_create apim:api_publish apim:subscribe apim:app_manage apim:sub_manage"
-            }
-            
-            token_response = self.session.post(
-                self.token_endpoint,
-                data=token_data,
-                auth=(self.username, self.password)
+
+        client_credentials: List[tuple[str, str]] = []
+        last_dcr_response: Optional[requests.Response] = None
+
+        for version in self.dcr_versions:
+            dcr_endpoint = f"{self.host}/client-registration/{version}/register"
+            print(f"   → Trying DCR endpoint {version}...")
+            response = self.session.post(
+                dcr_endpoint,
+                json=dcr_payload,
+                headers={
+                    "Authorization": f"Basic {auth_header}",
+                    "Content-Type": "application/json"
+                }
             )
-        else:
-            dcr_data = dcr_response.json()
-            client_id = dcr_data["clientId"]
-            client_secret = dcr_data["clientSecret"]
-            
-            print(f"✓ DCR successful: {client_id}")
-            
-            # Get token using registered client
-            token_data = {
-                "grant_type": "password",
-                "username": self.username,
-                "password": self.password,
-                "scope": "apim:api_view apim:api_create apim:api_publish apim:subscribe apim:app_manage apim:sub_manage"
-            }
-            
-            token_response = self.session.post(
-                self.token_endpoint,
-                data=token_data,
-                auth=(client_id, client_secret)
-            )
+            last_dcr_response = response
+
+            if response.status_code in [200, 201]:
+                dcr_data = response.json()
+                client_id = dcr_data["clientId"]
+                client_secret = dcr_data["clientSecret"]
+                client_credentials.append((client_id, client_secret))
+                print(f"✓ DCR successful using {version}: {client_id}")
+                break
+
+            # If the client already exists WSO2 responds with a 409/400. Some
+            # versions echo the credentials back in the payload – reuse them if
+            # available instead of treating the call as fatal.
+            try:
+                error_data = response.json()
+            except Exception:
+                error_data = {}
+
+            existing_id = error_data.get("clientId") or error_data.get("client_id")
+            existing_secret = error_data.get("clientSecret") or error_data.get("client_secret")
+            if existing_id and existing_secret:
+                client_credentials.append((existing_id, existing_secret))
+                print(f"⚠️  DCR reported existing client ({version}), reusing credentials")
+                break
+
+        if not client_credentials:
+            print("⚠️  DCR failed for all known versions, falling back to built-in clients")
+
+        token_data = {
+            "grant_type": "password",
+            "username": self.username,
+            "password": self.password,
+            "scope": "apim:api_view apim:api_create apim:api_publish apim:subscribe apim:app_manage apim:sub_manage"
+        }
+
+        # Candidate OAuth clients to try against the token endpoint. Prefer the
+        # dynamically registered client, then known built-ins, and finally the
+        # legacy behaviour (username/password) to preserve backwards
+        # compatibility.
+        fallback_clients = [
+            ("admin_cli", "admin"),
+            (self.username, self.password),
+        ]
+
+        token_response = None
+        for client in [*client_credentials, *fallback_clients]:
+            try:
+                token_response = self.session.post(
+                    self.token_endpoint,
+                    data=token_data,
+                    auth=client
+                )
+            except Exception as exc:
+                print(f"   ⚠️  Token request with client {client[0]} failed: {exc}")
+                continue
+
+            if token_response.status_code == 200:
+                break
+            else:
+                print(f"   ⚠️  Token request using client {client[0]} failed: {token_response.status_code}")
+
+        if not token_response or token_response.status_code != 200:
+            if last_dcr_response is not None:
+                print(f"❌ Failed to register OAuth client: {last_dcr_response.status_code} - {last_dcr_response.text}")
+            if token_response is not None:
+                print(f"❌ Token endpoint response: {token_response.status_code} - {token_response.text[:300]}")
+            sys.exit(1)
         
         if token_response.status_code == 200:
             token_data = token_response.json()
