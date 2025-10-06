@@ -28,7 +28,8 @@ name = "WSO2IS"
 type = "WSO2-IS"
 display_name = "WSO2 Identity Server"
 description = "Financial-grade Identity Server for PCI-DSS compliance"
-enabled = false  # Disabled during initial setup, enable after both services are stable
+enabled = true
+is_default = true
 
 [apim.key_manager.configuration]
 ServerURL = "https://wso2is:9443/services/"
@@ -41,6 +42,13 @@ UserInfoURL = "https://wso2is:9443/oauth2/userinfo"
 AuthorizeURL = "https://wso2is:9443/oauth2/authorize"
 TokenValidation = "INTROSPECT"
 ClaimConfiguration = "use_user_store_as_claim_dialect"
+WellKnownEndpoint = "https://wso2is:9443/oauth2/.well-known/openid-configuration"
+Issuer = "https://wso2is:9443/oauth2/token"
+JWKSEndpoint = "https://wso2is:9443/oauth2/jwks"
+ConsumerKeyClaim = "azp"
+ScopesClaim = "scope"
+Audience = "wso2am"
+KeyManagerClientConfiguration = "{\"GrantTypes\": [\"password\", \"client_credentials\", \"refresh_token\", \"urn:ietf:params:oauth:grant-type:jwt-bearer\"]}"
 
 # JWT Token Validation - WSO2 IS Integration
 [apim.jwt]

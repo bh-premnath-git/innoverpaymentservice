@@ -8,13 +8,75 @@ import sys
 import requests
 import base64
 import json
-from typing import Dict
+from typing import Dict, Any
 
 # Disable SSL warnings for dev environment
 requests.packages.urllib3.disable_warnings()
 
 
-def enable_key_manager(wso2_host: str, username: str, password: str) -> bool:
+def build_key_manager_payload(wso2_is_host: str, username: str, password: str) -> Dict[str, Any]:
+    """Construct payload used for the Admin REST API."""
+
+    wso2_is_host = wso2_is_host.rstrip("/")
+
+    configuration: Dict[str, Any] = {
+        "ServerURL": f"{wso2_is_host}/services/",
+        "Username": username,
+        "Password": password,
+        "TokenURL": f"{wso2_is_host}/oauth2/token",
+        "RevokeURL": f"{wso2_is_host}/oauth2/revoke",
+        "IntrospectURL": f"{wso2_is_host}/oauth2/introspect",
+        "UserInfoURL": f"{wso2_is_host}/oauth2/userinfo",
+        "AuthorizeURL": f"{wso2_is_host}/oauth2/authorize",
+        "JWKSEndpoint": f"{wso2_is_host}/oauth2/jwks",
+        "WellKnownEndpoint": f"{wso2_is_host}/oauth2/.well-known/openid-configuration",
+        "Issuer": f"{wso2_is_host}/oauth2/token",
+        "TokenValidation": "INTROSPECT",
+        "ClaimConfiguration": "use_user_store_as_claim_dialect",
+        "ConsumerKeyClaim": "azp",
+        "ScopesClaim": "scope",
+        "Audience": "wso2am",
+        "KeyManagerClientConfiguration": {
+            "GrantTypes": [
+                "password",
+                "client_credentials",
+                "refresh_token",
+                "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            ]
+        },
+    }
+
+    return {
+        "name": "WSO2IS",
+        "displayName": "WSO2 Identity Server",
+        "type": "WSO2-IS",
+        "description": "WSO2 Identity Server as external Key Manager",
+        "enabled": True,
+        "isDefault": True,
+        "tokenType": "JWT",
+        "alias": "WSO2IS",
+        "configuration": configuration,
+        "additionalProperties": {},
+        "claimMapping": [
+            {
+                "remoteClaim": "sub",
+                "localClaim": "http://wso2.org/claims/username",
+            },
+            {
+                "remoteClaim": "email",
+                "localClaim": "http://wso2.org/claims/emailaddress",
+            },
+        ],
+        "scopeMappings": [],
+        "certificate": {
+            "type": "JWKS",
+            "value": "",
+            "alias": "",
+        },
+    }
+
+
+def enable_key_manager(wso2_host: str, username: str, password: str, wso2_is_host: str | None = None) -> bool:
     """Enable WSO2 IS Key Manager via REST API"""
     print("=" * 60)
     print("WSO2 IS Key Manager Enablement")
@@ -26,6 +88,7 @@ def enable_key_manager(wso2_host: str, username: str, password: str) -> bool:
     admin_api = f"{wso2_host}/api/am/admin/v4"
     token_endpoint = f"{wso2_host}/oauth2/token"
     dcr_endpoint = f"{wso2_host}/client-registration/v0.17/register"
+    wso2_is_host = (wso2_is_host or os.getenv("WSO2_IS_HOST", "https://wso2is:9443")).rstrip("/")
     
     # Step 1: Get access token
     print("\n🔑 Obtaining access token...")
@@ -112,36 +175,49 @@ def enable_key_manager(wso2_host: str, username: str, password: str) -> bool:
             wso2is_km = km
             break
     
+    payload = build_key_manager_payload(wso2_is_host, username, password)
+
     if not wso2is_km:
-        print("\n❌ WSO2 IS Key Manager not found in configuration")
-        print("   Please add it to deployment.toml first")
-        return False
-    
+        print("\nℹ️  WSO2 IS Key Manager not found. Creating new configuration via Admin REST API...")
+
+        create_response = session.post(
+            f"{admin_api}/key-managers",
+            json=payload,
+            headers={"Content-Type": "application/json"}
+        )
+
+        if create_response.status_code not in (200, 201):
+            print(f"❌ Failed to create Key Manager: {create_response.status_code}")
+            print(f"   Response: {create_response.text[:300]}")
+            return False
+
+        print("✓ WSO2 IS Key Manager created and enabled")
+        return True
+
     km_id = wso2is_km["id"]
-    
-    # Step 4: Enable the Key Manager
+
     if wso2is_km.get("enabled", False):
         print(f"\n✓ WSO2 IS Key Manager is already enabled")
         return True
-    
-    print(f"\n🔧 Enabling WSO2 IS Key Manager (ID: {km_id})...")
-    
-    # Update the Key Manager configuration
-    wso2is_km["enabled"] = True
-    
+
+    print(f"\n🔧 Updating WSO2 IS Key Manager configuration (ID: {km_id})...")
+
+    updated_payload: Dict[str, Any] = {**wso2is_km, **payload}
+    updated_payload["id"] = km_id
+
     update_response = session.put(
         f"{admin_api}/key-managers/{km_id}",
-        json=wso2is_km,
+        json=updated_payload,
         headers={"Content-Type": "application/json"}
     )
-    
-    if update_response.status_code == 200:
-        print("✓ WSO2 IS Key Manager enabled successfully")
-        return True
-    else:
+
+    if update_response.status_code not in (200, 202):
         print(f"❌ Failed to enable Key Manager: {update_response.status_code}")
         print(f"   Response: {update_response.text[:300]}")
         return False
+
+    print("✓ WSO2 IS Key Manager enabled successfully")
+    return True
 
 
 def main():
@@ -149,8 +225,9 @@ def main():
     wso2_host = os.getenv("WSO2_HOST", "https://localhost:9443")
     wso2_username = os.getenv("WSO2_ADMIN_USERNAME", "admin")
     wso2_password = os.getenv("WSO2_ADMIN_PASSWORD", "admin")
-    
-    success = enable_key_manager(wso2_host, wso2_username, wso2_password)
+    wso2_is_host = os.getenv("WSO2_IS_HOST", "https://localhost:9444")
+
+    success = enable_key_manager(wso2_host, wso2_username, wso2_password, wso2_is_host)
     
     if success:
         print("\n" + "=" * 60)
@@ -158,8 +235,7 @@ def main():
         print("=" * 60)
         print("\nNext steps:")
         print("1. Restart WSO2 API Manager for changes to take effect")
-        print("2. Update deployment.toml to set 'enabled = true'")
-        print("3. Re-run the setup script if needed")
+        print("2. Re-run the setup script if additional APIs need provisioning")
         sys.exit(0)
     else:
         print("\n" + "=" * 60)

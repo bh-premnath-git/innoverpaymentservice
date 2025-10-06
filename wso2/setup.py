@@ -12,6 +12,7 @@ import base64
 import requests
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
+from enable_wso2is_keymanager import enable_key_manager as enable_wso2is_key_manager
 
 # Disable SSL warnings for dev environment
 requests.packages.urllib3.disable_warnings()
@@ -770,7 +771,7 @@ def main():
     
     # Environment variables
     wso2_host = os.getenv("WSO2_HOST", "https://wso2am:9443")
-    wso2is_host = os.getenv("WSO2_IS_HOST", "https://wso2is:9444")
+    wso2is_host = os.getenv("WSO2_IS_HOST", "https://wso2is:9443")
     wso2_username = os.getenv("WSO2_ADMIN_USERNAME", "admin")
     wso2_password = os.getenv("WSO2_ADMIN_PASSWORD", "admin")
     config_file = os.getenv("API_CONFIG_FILE", "/config/api-config.yaml")
@@ -783,7 +784,17 @@ def main():
     
     # Wait for WSO2 to be ready
     client.wait_for_ready()
-    
+
+    # Optionally ensure the external key manager is enabled before provisioning APIs
+    if os.getenv("ENABLE_WSO2IS_KEY_MANAGER", "true").lower() in {"1", "true", "yes"}:
+        print("\n" + "=" * 60)
+        print("Ensuring WSO2 IS Key Manager is enabled")
+        print("=" * 60)
+
+        if not enable_wso2is_key_manager(wso2_host, wso2_username, wso2_password, wso2is_host):
+            print("\n❌ Unable to enable WSO2 IS as Key Manager. Aborting setup.")
+            sys.exit(1)
+
     # Get access token
     client.get_access_token()
     
