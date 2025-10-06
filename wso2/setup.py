@@ -239,17 +239,18 @@ class WSO2APIManager:
             "visibility": "PUBLIC",
             "endpointConfig": {
                 "endpoint_type": "http",
-                "production_endpoints": {
+                "sandbox_endpoints": {
                     "url": backend_url
                 },
-                "sandbox_endpoints": {
+                "production_endpoints": {
                     "url": backend_url
                 }
             },
+            "endpointImplementationType": "ENDPOINT",
             "policies": ["Unlimited"],
             "apiThrottlingPolicy": "Unlimited",
-            "authorizationHeader": "Authorization",
-            "securityScheme": ["oauth2"],  # Keep oauth2, we'll remove requirements after
+            "authorizationHeader": "",  # Empty for public APIs
+            "securityScheme": [],  # Empty = No security (public API)
             "keyManagers": key_managers
         }
         
@@ -283,8 +284,11 @@ class WSO2APIManager:
         try:
             # Get current swagger definition
             response = self.session.get(f"{self.publisher_api}/apis/{api_id}/swagger")
+            print(f"   DEBUG: Get swagger status: {response.status_code}")
+            
             if response.status_code != 200:
                 print(f"   ⚠️  Could not get swagger: {response.status_code}")
+                print(f"   Response: {response.text[:200]}")
                 return False
             
             swagger = response.json()
@@ -336,12 +340,16 @@ class WSO2APIManager:
             # Remove global security requirement
             swagger["security"] = []
             
-            # Update swagger
+            print(f"   DEBUG: Updating swagger with {len(swagger.get('paths', {}))} paths")
+            
+            # Update swagger (WSO2 4.5.0 accepts both JSON and YAML)
             update_response = self.session.put(
                 f"{self.publisher_api}/apis/{api_id}/swagger",
                 json=swagger,
                 headers={"Content-Type": "application/json"}
             )
+            
+            print(f"   DEBUG: Update swagger status: {update_response.status_code}")
             
             if update_response.status_code == 200:
                 print(f"   ✓ API configured as passthrough proxy (no security)")
@@ -351,6 +359,8 @@ class WSO2APIManager:
                 return False
         except Exception as e:
             print(f"   ❌ Exception configuring API: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def create_mediation_sequence(self, api_id: str) -> bool:
@@ -401,6 +411,115 @@ class WSO2APIManager:
             return True
         else:
             print(f"   ⚠️  Publish status: {response.status_code}")
+            return False
+    
+    def create_revision(self, api_id: str) -> Optional[str]:
+        """Create a new revision for the API"""
+        print(f"   📦 Creating revision for API {api_id}")
+        
+        # Verify API exists first
+        verify_response = self.session.get(f"{self.publisher_api}/apis/{api_id}")
+        if verify_response.status_code != 200:
+            print(f"   ❌ API not found: {api_id}")
+            print(f"   Response: {verify_response.text[:200]}")
+            return None
+        
+        api_data = verify_response.json()
+        print(f"   ✓ API exists: {api_data.get('name')} v{api_data.get('version')}")
+        print(f"   Status: {api_data.get('lifeCycleStatus')}")
+        
+        # Only create revision if API is PUBLISHED
+        if api_data.get('lifeCycleStatus') != 'PUBLISHED':
+            print(f"   ⚠️  API not published yet, skipping revision")
+            return None
+        
+        revision_payload = {
+            "description": "Auto-generated revision"
+        }
+        
+        response = self.session.post(
+            f"{self.publisher_api}/apis/{api_id}/revisions",
+            json=revision_payload,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        print(f"   DEBUG: Create revision status: {response.status_code}")
+        
+        if response.status_code in [200, 201]:
+            revision_id = response.json().get("id")
+            print(f"   ✓ Revision created: {revision_id}")
+            return revision_id
+        else:
+            print(f"   ⚠️  Revision creation failed: {response.status_code}")
+            print(f"   Response: {response.text[:300]}")
+            return None
+    
+    def deploy_revision(self, api_id: str, revision_id: str, environments: List[str] = None) -> bool:
+        """Deploy revision to gateway environments"""
+        if environments is None:
+            environments = ["Default"]  # Default gateway environment
+        
+        print(f"   🚀 Deploying revision {revision_id} to gateways: {', '.join(environments)}")
+        
+        deploy_payload = [
+            {
+                "name": env,
+                "vhost": "localhost",
+                "displayOnDevportal": True
+            }
+            for env in environments
+        ]
+        
+        response = self.session.post(
+            f"{self.publisher_api}/apis/{api_id}/deploy-revision",
+            params={"revisionId": revision_id},
+            json=deploy_payload
+        )
+        
+        if response.status_code in [200, 201]:
+            print(f"   ✓ Revision deployed to gateway successfully")
+            return True
+        else:
+            print(f"   ⚠️  Deployment failed: {response.status_code}")
+            print(f"   Response: {response.text[:200]}")
+            return False
+    
+    def update_api_endpoint(self, api_id: str, backend_url: str) -> bool:
+        """Update API endpoint configuration"""
+        print(f"   🔧 Updating endpoint to: {backend_url}")
+        
+        # Get current API definition
+        response = self.session.get(f"{self.publisher_api}/apis/{api_id}")
+        if response.status_code != 200:
+            print(f"   ⚠️  Failed to get API: {response.status_code}")
+            return False
+        
+        api_data = response.json()
+        
+        # Update endpoint config
+        api_data["endpointConfig"] = {
+            "endpoint_type": "http",
+            "sandbox_endpoints": {
+                "url": backend_url
+            },
+            "production_endpoints": {
+                "url": backend_url
+            }
+        }
+        api_data["endpointImplementationType"] = "ENDPOINT"
+        
+        # Update API
+        response = self.session.put(
+            f"{self.publisher_api}/apis/{api_id}",
+            json=api_data,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code == 200:
+            print(f"   ✓ Endpoint updated successfully")
+            return True
+        else:
+            print(f"   ⚠️  Endpoint update failed: {response.status_code}")
             return False
     
     def get_application_by_name(self, name: str) -> Optional[Dict]:
@@ -497,15 +616,23 @@ class WSO2APIManager:
         print(f"   ✓ Using 'default' scope")
         return scopes
     
-    def generate_application_keys(self, app_id: str, key_type: str = "PRODUCTION", scopes: List[str] = None):
-        """Generate or update keys for application"""
-        print(f"   🔐 Generating/updating {key_type} keys for app {app_id}", flush=True)
+    def generate_application_keys(self, app_id: str, key_type: str = "PRODUCTION"):
+        """Generate or retrieve keys for application (WSO2 4.5.0 compatible)"""
+        print(f"   🔐 Getting {key_type} keys for app {app_id}")
         
-        # If no scopes provided, get all available scopes from subscriptions
-        if scopes is None:
-            scopes = self.get_application_scopes(app_id)
-            print(f"   DEBUG: Using scopes: {scopes}", flush=True)
+        # Try to retrieve existing keys first (avoids 409 conflicts)
+        get_response = self.session.get(
+            f"{self.devportal_api}/applications/{app_id}/keys/{key_type}"
+        )
         
+        if get_response.status_code == 200:
+            key_data = get_response.json()
+            print(f"   ✓ Retrieved existing keys")
+            print(f"      Consumer Key: {key_data.get('consumerKey', 'N/A')}")
+            return key_data
+        
+        # Keys don't exist, generate new ones
+        print(f"   📝 Generating new {key_type} keys...")
         key_payload = {
             "keyType": key_type,
             "grantTypesToBeSupported": [
@@ -515,61 +642,23 @@ class WSO2APIManager:
                 "refresh_token"
             ],
             "callbackUrl": "https://localhost:9443/login/callback",
-            "validityTime": 3600,
-            "scopes": scopes
+            "validityTime": 3600
         }
         
-        # Try to generate new keys
         response = self.session.post(
             f"{self.devportal_api}/applications/{app_id}/generate-keys",
             json=key_payload,
             headers={"Content-Type": "application/json"}
         )
         
-        print(f"   DEBUG: Key generation response status: {response.status_code}")
-        
         if response.status_code == 200:
             key_data = response.json()
-            print(f"   ✓ Keys generated with {len(scopes)} scopes")
+            print(f"   ✓ Keys generated")
             print(f"      Consumer Key: {key_data['consumerKey']}")
             print(f"      Consumer Secret: {key_data['consumerSecret'][:20]}...")
             return key_data
-        elif response.status_code == 409:
-            # Keys already exist, update them instead
-            print(f"   ℹ️  Keys already exist (409), attempting to update scopes...")
-            
-            # Get existing keys
-            get_response = self.session.get(
-                f"{self.devportal_api}/applications/{app_id}/keys/{key_type}"
-            )
-            print(f"   DEBUG: Get keys response status: {get_response.status_code}")
-            
-            if get_response.status_code == 200:
-                existing_keys = get_response.json()
-                # Update with new scopes
-                update_response = self.session.put(
-                    f"{self.devportal_api}/applications/{app_id}/keys/{key_type}",
-                    json={
-                        **existing_keys,
-                        "supportedGrantTypes": key_payload["grantTypesToBeSupported"],
-                        "scopes": scopes
-                    },
-                    headers={"Content-Type": "application/json"}
-                )
-                
-                if update_response.status_code == 200:
-                    key_data = update_response.json()
-                    print(f"   ✓ Keys updated with {len(scopes)} scopes")
-                    print(f"      Consumer Key: {key_data.get('consumerKey', 'N/A')}")
-                    return key_data
-                else:
-                    print(f"   ⚠️  Key update failed: {update_response.status_code}")
-                    return existing_keys
-            else:
-                print(f"   ⚠️  Could not retrieve existing keys: {get_response.status_code}")
-                return None
         else:
-            print(f"   ⚠️  Key generation status: {response.status_code}")
+            print(f"   ⚠️  Key generation failed: {response.status_code}")
             print(f"      Response: {response.text[:200]}")
             return None
 
@@ -665,9 +754,23 @@ def main():
     for api_config in config.get("rest_apis", []):
         api_id = client.create_rest_api(api_config)
         if api_id:
-            # Security is already disabled in create_rest_api method
-            # Just publish the API
-            client.publish_api(api_id)
+            # Update endpoint configuration (fix for existing APIs with invalid URLs)
+            backend_url = api_config.get("backend_url")
+            if backend_url:
+                client.update_api_endpoint(api_id, backend_url)
+            
+            # Complete deployment sequence for WSO2 4.x
+            # 1. Publish API (lifecycle change) - might already be published
+            published = client.publish_api(api_id)
+            
+            # 2. Create revision (works even if already published)
+            revision_id = client.create_revision(api_id)
+            if revision_id:
+                # 3. Deploy revision to gateway
+                client.deploy_revision(api_id, revision_id, environments=["Default"])
+            elif not published:
+                print(f"   ⚠️  Skipping deployment - API not published and no revision")
+            
             created_apis.append({
                 "id": api_id,
                 "name": api_config["name"],
