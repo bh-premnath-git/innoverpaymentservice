@@ -485,7 +485,9 @@ services:
     networks: [edge]
 
   wallet-worker:
-    build: ./services/wallet
+    build:
+      context: ./services
+      dockerfile: wallet/Dockerfile
     working_dir: /app
     command:
       [
@@ -523,7 +525,9 @@ services:
     networks: [edge]
 
   rule-engine:
-    build: ./services/rule-engine
+    build:
+      context: ./services
+      dockerfile: rule-engine/Dockerfile
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-rules
@@ -553,7 +557,9 @@ services:
     networks: [edge]
 
   rule-engine-worker:
-    build: ./services/rule-engine
+    build:
+      context: ./services
+      dockerfile: rule-engine/Dockerfile
     working_dir: /app
     command:
       [
@@ -597,7 +603,9 @@ services:
     networks: [edge]
 
   forex:
-    build: ./services/forex
+    build:
+      context: ./services
+      dockerfile: forex/Dockerfile
     environment:
       <<: *svc_env
       SERVICE_NAME: svc-forex
