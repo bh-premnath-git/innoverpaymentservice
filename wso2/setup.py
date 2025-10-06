@@ -37,6 +37,12 @@ class WSO2APIManager:
         # Token and registration endpoint
         self.token_endpoint = f"{self.host}/oauth2/token"
         self.dcr_endpoint = f"{self.host}/client-registration/v0.17/register"
+
+        # WSO2 4.5.0 moved the DCR endpoint to v0.18 while older versions
+        # (including 4.1.x/4.4.x) still expose v0.17. Try the newest version
+        # first but keep a fallback list for older images so the setup script
+        # works across multiple docker-compose configurations.
+        self.dcr_versions = ["v0.18", "v0.17"]
         
         self.access_token = None
         
@@ -53,6 +59,88 @@ class WSO2APIManager:
             "grantType": "password refresh_token",
             "saasApp": True
         }
+
+        client_credentials: List[tuple[str, str]] = []
+        last_dcr_response: Optional[requests.Response] = None
+
+        for version in self.dcr_versions:
+            dcr_endpoint = f"{self.host}/client-registration/{version}/register"
+            print(f"   → Trying DCR endpoint {version}...")
+            response = self.session.post(
+                dcr_endpoint,
+                json=dcr_payload,
+                headers={
+                    "Authorization": f"Basic {auth_header}",
+                    "Content-Type": "application/json"
+                }
+            )
+            last_dcr_response = response
+
+            if response.status_code in [200, 201]:
+                dcr_data = response.json()
+                client_id = dcr_data["clientId"]
+                client_secret = dcr_data["clientSecret"]
+                client_credentials.append((client_id, client_secret))
+                print(f"✓ DCR successful using {version}: {client_id}")
+                break
+
+            # If the client already exists WSO2 responds with a 409/400. Some
+            # versions echo the credentials back in the payload – reuse them if
+            # available instead of treating the call as fatal.
+            try:
+                error_data = response.json()
+            except Exception:
+                error_data = {}
+
+            existing_id = error_data.get("clientId") or error_data.get("client_id")
+            existing_secret = error_data.get("clientSecret") or error_data.get("client_secret")
+            if existing_id and existing_secret:
+                client_credentials.append((existing_id, existing_secret))
+                print(f"⚠️  DCR reported existing client ({version}), reusing credentials")
+                break
+
+        if not client_credentials:
+            print("⚠️  DCR failed for all known versions, falling back to built-in clients")
+
+        token_data = {
+            "grant_type": "password",
+            "username": self.username,
+            "password": self.password,
+            "scope": "apim:api_view apim:api_create apim:api_publish apim:subscribe apim:app_manage apim:sub_manage"
+        }
+
+        # Candidate OAuth clients to try against the token endpoint. Prefer the
+        # dynamically registered client, then known built-ins, and finally the
+        # legacy behaviour (username/password) to preserve backwards
+        # compatibility.
+        fallback_clients = [
+            ("admin_cli", "admin"),
+            (self.username, self.password),
+        ]
+
+        token_response = None
+        for client in [*client_credentials, *fallback_clients]:
+            try:
+                token_response = self.session.post(
+                    self.token_endpoint,
+                    data=token_data,
+                    auth=client
+                )
+            except Exception as exc:
+                print(f"   ⚠️  Token request with client {client[0]} failed: {exc}")
+                continue
+
+            if token_response.status_code == 200:
+                break
+            else:
+                print(f"   ⚠️  Token request using client {client[0]} failed: {token_response.status_code}")
+
+        if not token_response or token_response.status_code != 200:
+            if last_dcr_response is not None:
+                print(f"❌ Failed to register OAuth client: {last_dcr_response.status_code} - {last_dcr_response.text}")
+            if token_response is not None:
+                print(f"❌ Token endpoint response: {token_response.status_code} - {token_response.text[:300]}")
+            sys.exit(1)
         
         dcr_response = self.session.post(
             self.dcr_endpoint,
@@ -114,11 +202,23 @@ class WSO2APIManager:
         max_wait_seconds = int(os.getenv("WSO2_MAX_WAIT_SECONDS", "600"))  # Default 10 minutes
         poll_interval = 5  # Check every 5 seconds
         
+    def wait_for_ready(self):
+        """Wait for WSO2 to be FULLY ready using time-bound strategy"""
+        max_wait_seconds = int(os.getenv("WSO2_MAX_WAIT_SECONDS", "600"))  # Default 10 minutes
+        poll_interval = 5  # Check every 5 seconds
+        
         print("⏳ Waiting for WSO2 API Manager to be FULLY ready...")
+        print(f"   Maximum wait time: {max_wait_seconds // 60} minutes")
+        print(f"   Polling interval: {poll_interval} seconds")
         print(f"   Maximum wait time: {max_wait_seconds // 60} minutes")
         print(f"   Polling interval: {poll_interval} seconds")
         
         # Step 1: Wait for basic service to respond
+        print("\n   📍 Step 1/3: Waiting for WSO2 service...")
+        start_time = time.time()
+        attempt = 0
+        while time.time() - start_time < max_wait_seconds:
+            attempt += 1
         print("\n   📍 Step 1/3: Waiting for WSO2 service...")
         start_time = time.time()
         attempt = 0
@@ -129,7 +229,12 @@ class WSO2APIManager:
                 if response.status_code == 200:
                     elapsed = int(time.time() - start_time)
                     print(f"   ✓ WSO2 service is up (took {elapsed}s, {attempt} attempts)")
+                    elapsed = int(time.time() - start_time)
+                    print(f"   ✓ WSO2 service is up (took {elapsed}s, {attempt} attempts)")
                     break
+                elif response.status_code in [401, 403]:
+                    print(f"   ⚠️  Authentication issue detected: HTTP {response.status_code}")
+            except Exception as e:
                 elif response.status_code in [401, 403]:
                     print(f"   ⚠️  Authentication issue detected: HTTP {response.status_code}")
             except Exception as e:
@@ -139,10 +244,75 @@ class WSO2APIManager:
                 elapsed = int(time.time() - start_time)
                 print(f"      ⏱️  Still waiting... ({elapsed}s / {max_wait_seconds}s)")
             time.sleep(poll_interval)
+            if attempt % 12 == 0:  # Log every minute (12 * 5s)
+                elapsed = int(time.time() - start_time)
+                print(f"      ⏱️  Still waiting... ({elapsed}s / {max_wait_seconds}s)")
+            time.sleep(poll_interval)
         else:
+            print(f"   ❌ WSO2 service did not start within {max_wait_seconds}s")
             print(f"   ❌ WSO2 service did not start within {max_wait_seconds}s")
             sys.exit(1)
         
+        # Step 2: Wait for DCR and OAuth to be fully ready
+        print("\n   📍 Step 2/3: Waiting for OAuth2/DCR to be ready...")
+        start_time = time.time()
+        attempt = 0
+        auth_failure_count = 0
+        
+        while time.time() - start_time < max_wait_seconds:
+            attempt += 1
+            try:
+                # Try DCR to verify OAuth2 is working
+                auth_header = base64.b64encode(f"{self.username}:{self.password}".encode()).decode()
+                dcr_payload = {
+                    "clientName": f"setup_client_{int(time.time())}",
+                    "owner": self.username,
+                    "grantType": "password refresh_token",
+                    "saasApp": True
+                }
+                
+                dcr_response = self.session.post(
+                    self.dcr_endpoint,
+                    json=dcr_payload,
+                    headers={
+                        "Authorization": f"Basic {auth_header}",
+                        "Content-Type": "application/json"
+                    },
+                    timeout=10
+                )
+                
+                # Early termination on authentication failures
+                if dcr_response.status_code in [401, 403]:
+                    auth_failure_count += 1
+                    print(f"   ⚠️  Authentication failed: HTTP {dcr_response.status_code}")
+                    if auth_failure_count >= 3:
+                        print(f"   ❌ Multiple authentication failures. Check credentials!")
+                        print(f"      Username: {self.username}")
+                        print(f"      Response: {dcr_response.text[:200]}")
+                        sys.exit(1)
+                
+                if dcr_response.status_code in [200, 201]:
+                    dcr_data = dcr_response.json()
+                    client_id = dcr_data["clientId"]
+                    client_secret = dcr_data["clientSecret"]
+                    
+                    # Try to get token with the registered client
+                    token_response = self.session.post(
+                        f"{self.host}/oauth2/token",
+                        data={
+                            "grant_type": "password",
+                            "username": self.username,
+                            "password": self.password,
+                            "scope": "apim:api_view"
+                        },
+                        auth=(client_id, client_secret),
+                        timeout=10
+                    )
+                    
+                    if token_response.status_code == 200:
+                        elapsed = int(time.time() - start_time)
+                        print(f"   ✓ OAuth2/DCR is ready (took {elapsed}s, {attempt} attempts)")
+                        print(f"      Client ID: {client_id}")
         # Step 2: Wait for DCR and OAuth to be fully ready
         print("\n   📍 Step 2/3: Waiting for OAuth2/DCR to be ready...")
         start_time = time.time()
@@ -207,7 +377,12 @@ class WSO2APIManager:
                     elif token_response.status_code in [401, 403]:
                         print(f"   ⚠️  Token request failed: HTTP {token_response.status_code}")
                         
+                    elif token_response.status_code in [401, 403]:
+                        print(f"   ⚠️  Token request failed: HTTP {token_response.status_code}")
+                        
             except Exception as e:
+                if attempt % 6 == 0:  # Log exceptions occasionally
+                    print(f"      ⏱️  Connection error, retrying... ({type(e).__name__})")
                 if attempt % 6 == 0:  # Log exceptions occasionally
                     print(f"      ⏱️  Connection error, retrying... ({type(e).__name__})")
             
@@ -215,11 +390,21 @@ class WSO2APIManager:
                 elapsed = int(time.time() - start_time)
                 print(f"      ⏱️  Still waiting... ({elapsed}s / {max_wait_seconds}s)")
             time.sleep(poll_interval)
+            if attempt % 12 == 0:  # Log every minute
+                elapsed = int(time.time() - start_time)
+                print(f"      ⏱️  Still waiting... ({elapsed}s / {max_wait_seconds}s)")
+            time.sleep(poll_interval)
         else:
+            print(f"   ❌ OAuth2/DCR failed to initialize within {max_wait_seconds}s")
+            print("   This may indicate WSO2AM is not fully configured or credentials are incorrect")
             print(f"   ❌ OAuth2/DCR failed to initialize within {max_wait_seconds}s")
             print("   This may indicate WSO2AM is not fully configured or credentials are incorrect")
             sys.exit(1)
         
+        # Step 3: Final stabilization wait
+        print("\n   📍 Step 3/3: Final stabilization wait...")
+        time.sleep(15)
+        print("✅ WSO2 API Manager is FULLY ready\n")
         # Step 3: Final stabilization wait
         print("\n   📍 Step 3/3: Final stabilization wait...")
         time.sleep(15)
