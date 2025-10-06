@@ -56,6 +56,8 @@ create_user() {
         -u "${ADMIN_USER}:${ADMIN_PASS}" \
         -H "Accept: application/json")
     
+    USER_ID=""
+    
     if echo "$USER_CHECK" | grep -q "\"totalResults\":0"; then
         echo "Creating user '$username'..."
         
@@ -83,6 +85,7 @@ create_user() {
         
         if [ "$HTTP_CODE" = "201" ]; then
             echo "✓ User '$username' created successfully"
+            USER_ID=$(echo "$RESPONSE_BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
         else
             echo "⚠️  Failed to create user '$username'. HTTP code: $HTTP_CODE"
             echo "Response: $RESPONSE_BODY" | head -c 200
@@ -90,6 +93,31 @@ create_user() {
         fi
     else
         echo "✓ User '$username' already exists"
+        USER_ID=$(echo "$USER_CHECK" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
+    
+    # Assign user to role (if not admin, who already has admin role)
+    if [ -n "$USER_ID" ] && [ "$username" != "admin" ]; then
+        echo "Assigning role '$role' to user '$username'..."
+        
+        # Use SOAP API to assign role (SCIM2 role assignment is complex)
+        curl -k -s -X POST "${WSO2_HOST}/services/RemoteUserStoreManagerService" \
+            -u "${ADMIN_USER}:${ADMIN_PASS}" \
+            -H "Content-Type: text/xml" \
+            -H "SOAPAction: urn:updateRoleListOfUser" \
+            -d "<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' xmlns:ser='http://service.ws.um.carbon.wso2.org'>
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <ser:updateRoleListOfUser>
+                        <ser:userName>${username}</ser:userName>
+                        <ser:deletedRoles></ser:deletedRoles>
+                        <ser:newRoles>${role}</ser:newRoles>
+                        <ser:newRoles>Internal/everyone</ser:newRoles>
+                    </ser:updateRoleListOfUser>
+                </soapenv:Body>
+                </soapenv:Envelope>" > /dev/null 2>&1
+        
+        echo "✓ Role '${role}' assigned to '$username'"
     fi
     
     echo "---"

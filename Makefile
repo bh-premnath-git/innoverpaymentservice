@@ -136,27 +136,21 @@ wso2-reset:
 # Enable WSO2 IS Key Manager (for production)
 wso2-enable-km:
 	@echo "Enabling WSO2 IS as Key Manager..."
-	@docker compose exec wso2am python3 /app/enable_wso2is_keymanager.py
 
 # Publish APIs to WSO2
 publish-apis:
 	@docker compose run --rm wso2-setup
 
-# Test WSO2 IS authentication
-test-auth:
-	@echo "=== Testing WSO2 IS Authentication ==="
-	python3 test_wso2_auth.py
-
-# Test complete flow (WSO2 IS → APIM Gateway → Backend)
-test-flow:
-	@echo "=== Testing Complete Authentication Flow ==="
-	python3 test_complete_flow.py
+# Test complete authentication flow
+test:
+	@echo "=== Testing WSO2 Authentication & API Access ==="
+	@echo "WSO2 IS → Gateway → Backend Services"
+	python3 test_auth_flow.py
 
 # Help
 help:
 	@echo "=== Available Targets (Financial Platform) ==="
 	@echo ""
-	@echo "Service Management:"
 	@echo "  make up              - Start all services (WSO2 IS + APIM)"
 	@echo "  make down            - Stop and remove containers"
 	@echo "  make nuke            - Remove everything (containers, volumes, images)"
@@ -171,9 +165,8 @@ help:
 	@echo "  make urls            - Show all service URLs (WSO2 IS, APIM, etc.)"
 	@echo ""
 	@echo "Testing:"
+	@echo "  make test            - Test WSO2 auth + API access (comprehensive)"
 	@echo "  make smoke-test      - Run comprehensive smoke tests"
-	@echo "  make test-auth       - Test WSO2 IS authentication"
-	@echo "  make test-flow       - Test complete flow (IS → Gateway → Backend)"
 	@echo "  make workers         - Show Celery worker status"
 	@echo "  make test-worker-<svc> - Send test task to worker"
 	@echo ""
