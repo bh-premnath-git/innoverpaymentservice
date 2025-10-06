@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 security = HTTPBearer()
 
 # Environment variables - WSO2 Identity Server
-WSO2_IS_URL = os.getenv("WSO2_IS_URL", "https://wso2is:9444")
+WSO2_IS_URL = os.getenv("WSO2_IS_URL", "https://wso2is:9443")
 OIDC_ISSUER = os.getenv("OIDC_ISSUER", "https://localhost:9444/oauth2/token")
 
 

@@ -133,7 +133,7 @@ class WSO2APIManager:
         
         # Step 2: Wait for Publisher API to be fully ready
         print("   Step 2/3: Waiting for Publisher API...")
-        for attempt in range(30):
+        for attempt in range(40):
             try:
                 # Try to get access token first
                 token_response = self.session.post(
@@ -146,30 +146,36 @@ class WSO2APIManager:
                     },
                     headers={"Content-Type": "application/x-www-form-urlencoded"},
                     auth=(self.username, self.password),
-                    timeout=5
+                    timeout=10
                 )
                 
                 if token_response.status_code == 200:
-                    # Now verify Publisher API actually works
+                    token_data = token_response.json()
+                    temp_token = token_data.get("access_token")
+                    
+                    # Now verify Publisher API actually works with the token
                     api_response = self.session.get(
                         f"{self.publisher_api}/apis?limit=1",
-                        timeout=5
+                        headers={"Authorization": f"Bearer {temp_token}"},
+                        timeout=10
                     )
-                    if api_response.status_code in [200, 401]:  # 401 is ok, means auth is working
+                    if api_response.status_code == 200:
                         print("   ✓ Publisher API is ready")
                         break
-            except Exception:
+            except Exception as e:
                 pass
             
             if attempt % 6 == 0:
-                print(f"      Checking... ({attempt + 1}/30)")
+                print(f"      Checking... ({attempt + 1}/40)")
             time.sleep(10)
         else:
-            print("   ⚠️  Publisher API slow to start, proceeding anyway...")
+            print("   ❌ Publisher API failed to initialize properly")
+            print("   This may indicate WSO2AM is not fully configured")
+            sys.exit(1)
         
         # Step 3: Final wait to ensure everything is stable
         print("   Step 3/3: Waiting for full initialization...")
-        time.sleep(15)
+        time.sleep(20)
         print("✓ WSO2 API Manager is FULLY ready")
         return True
     
@@ -197,8 +203,8 @@ class WSO2APIManager:
             pass
         return ["Resident Key Manager"]  # Fallback to default
     
-    def create_rest_api(self, api_config: Dict) -> Optional[str]:
-        """Create REST API in WSO2"""
+    def create_rest_api(self, api_config: Dict, retry_count: int = 3) -> Optional[str]:
+        """Create REST API in WSO2 with retry logic"""
         name = api_config["name"]
         version = api_config["version"]
         context = api_config["context"]
@@ -254,28 +260,37 @@ class WSO2APIManager:
             "keyManagers": key_managers
         }
         
-        response = self.session.post(
-            f"{self.publisher_api}/apis",
-            json=api_payload,
-            headers={"Content-Type": "application/json"}
-        )
+        # Retry logic for API creation
+        for attempt in range(retry_count):
+            response = self.session.post(
+                f"{self.publisher_api}/apis",
+                json=api_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
+            
+            if response.status_code == 201:
+                api_data = response.json()
+                api_id = api_data["id"]
+                print(f"   ✓ Created API: {api_id}")
+
+                # Ensure OpenAPI definition keeps the default security contract
+                self.ensure_api_security(api_id)
+
+                # Add mediation sequence as backup
+                self.create_mediation_sequence(api_id)
+
+                return api_id
+            elif response.status_code == 500 and attempt < retry_count - 1:
+                print(f"   ⚠️  Attempt {attempt + 1}/{retry_count} failed with 500 error, retrying...")
+                time.sleep(5)
+                continue
+            else:
+                print(f"   ❌ Failed to create API: {response.status_code}")
+                print(f"      Response: {response.text[:300]}")
+                return None
         
-        if response.status_code == 201:
-            api_data = response.json()
-            api_id = api_data["id"]
-            print(f"   ✓ Created API: {api_id}")
-
-            # Ensure OpenAPI definition keeps the default security contract
-            self.ensure_api_security(api_id)
-
-            # Add mediation sequence as backup
-            self.create_mediation_sequence(api_id)
-
-            return api_id
-        else:
-            print(f"   ❌ Failed to create API: {response.status_code}")
-            print(f"      Response: {response.text[:200]}")
-            return None
+        return None
     
     def ensure_api_security(self, api_id: str) -> bool:
         """Restore default security settings for the API and its Swagger definition"""
@@ -629,10 +644,14 @@ class WSO2APIManager:
         )
         
         if get_response.status_code == 200:
-            key_data = get_response.json()
-            print(f"   ✓ Retrieved existing keys")
-            print(f"      Consumer Key: {key_data.get('consumerKey', 'N/A')}")
-            return key_data
+            try:
+                key_data = get_response.json()
+                print(f"   ✓ Retrieved existing keys")
+                print(f"      Consumer Key: {key_data.get('consumerKey', 'N/A')}")
+                return key_data
+            except Exception as e:
+                print(f"   ⚠️  Failed to parse existing keys response: {e}")
+                # Continue to generate new keys
         
         # Keys don't exist, generate new ones
         print(f"   📝 Generating new {key_type} keys...")

@@ -6,8 +6,9 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy setup script
+# Copy setup scripts
 COPY setup.py /app/setup.py
+COPY enable_wso2is_keymanager.py /app/enable_wso2is_keymanager.py
 
 RUN chmod +x /app/*.py
 

@@ -106,6 +106,38 @@ setup-status:
 	@echo "=== WSO2 Setup Status ==="
 	@docker logs wso2-setup 2>&1 | tail -30 || echo "Setup container not found or not started yet"
 
+# WSO2 troubleshooting targets
+wso2-check:
+	@echo "=== WSO2 Services Status ==="
+	@docker ps -a --filter "name=wso2" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+wso2-logs:
+	@echo "=== WSO2 AM Recent Logs ==="
+	@docker logs innover-wso2am-1 --tail 50 2>&1 | grep -i "error\|exception\|failed" || echo "No errors found"
+	@echo ""
+	@echo "=== WSO2 Setup Logs ==="
+	@docker logs wso2-setup 2>&1 | tail -30 || echo "Setup not run yet"
+
+wso2-restart:
+	@echo "Restarting WSO2 services..."
+	@docker compose restart wso2am
+	@echo "Waiting for WSO2 AM to be healthy..."
+	@sleep 30
+	@docker compose up -d wso2-setup
+
+wso2-reset:
+	@echo "⚠️  Resetting WSO2 data (removes volumes)..."
+	@docker compose stop wso2am wso2is wso2-setup wso2is-init
+	@docker volume rm innover_wso2am-data innover_wso2is-data 2>/dev/null || true
+	@echo "Starting fresh WSO2 setup..."
+	@docker compose up -d wso2is wso2am
+	@echo "Wait for services to be healthy, then run: make setup"
+
+# Enable WSO2 IS Key Manager (for production)
+wso2-enable-km:
+	@echo "Enabling WSO2 IS as Key Manager..."
+	@docker compose exec wso2am python3 /app/enable_wso2is_keymanager.py
+
 # Publish APIs to WSO2
 publish-apis:
 	@docker compose run --rm wso2-setup
@@ -149,6 +181,13 @@ help:
 	@echo "  make setup           - Run manual WSO2 setup"
 	@echo "  make setup-status    - Check WSO2 setup status"
 	@echo "  make publish-apis    - Publish all APIs to WSO2 API Manager"
+	@echo ""
+	@echo "WSO2 Troubleshooting:"
+	@echo "  make wso2-check      - Check WSO2 services status"
+	@echo "  make wso2-logs       - View WSO2 error logs"
+	@echo "  make wso2-restart    - Restart WSO2 services and re-run setup"
+	@echo "  make wso2-reset      - Reset WSO2 data (fresh start)"
+	@echo "  make wso2-enable-km  - Enable WSO2 IS as Key Manager (production)"
 	@echo ""
 	@echo "Development:"
 	@echo "  make proto           - Generate protobuf files"

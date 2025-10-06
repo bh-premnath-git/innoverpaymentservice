@@ -24,22 +24,23 @@ password = "wso2carbon"
 
 # WSO2 Identity Server Integration (Key Manager)
 [[apim.key_manager]]
-name = "WSO2 Identity Server"
+name = "WSO2IS"
 type = "WSO2-IS"
 display_name = "WSO2 Identity Server"
 description = "Financial-grade Identity Server for PCI-DSS compliance"
-enabled = true
+enabled = false  # Disabled during initial setup, enable after both services are stable
 
 [apim.key_manager.configuration]
-ServerURL = "https://wso2is:9444/services/"
-Username = "admin"
-Password = "admin"
-TokenURL = "https://wso2is:9444/oauth2/token"
-RevokeURL = "https://wso2is:9444/oauth2/revoke"
-IntrospectURL = "https://wso2is:9444/oauth2/introspect"
-UserInfoURL = "https://wso2is:9444/oauth2/userinfo"
-AuthorizeURL = "https://wso2is:9444/oauth2/authorize"
+ServerURL = "https://wso2is:9443/services/"
+Username = "${admin.username}"
+Password = "${admin.password}"
+TokenURL = "https://wso2is:9443/oauth2/token"
+RevokeURL = "https://wso2is:9443/oauth2/revoke"
+IntrospectURL = "https://wso2is:9443/oauth2/introspect"
+UserInfoURL = "https://wso2is:9443/oauth2/userinfo"
+AuthorizeURL = "https://wso2is:9443/oauth2/authorize"
 TokenValidation = "INTROSPECT"
+ClaimConfiguration = "use_user_store_as_claim_dialect"
 
 # JWT Token Validation - WSO2 IS Integration
 [apim.jwt]
@@ -52,7 +53,7 @@ claim_dialect = "http://wso2.org/claims"
 
 [[apim.jwt.issuer]]
 issuer = "https://localhost:9444/oauth2/token"
-jwks_endpoint = "https://wso2is:9444/oauth2/jwks"
+jwks_endpoint = "https://wso2is:9443/oauth2/jwks"
 validate_subscribed_apis = false
 consumer_key_claim = "client_id"
 scopes_claim = "scope"

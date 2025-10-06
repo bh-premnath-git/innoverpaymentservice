@@ -11,13 +11,20 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Optional: requirements (skip if you don't have any)
-COPY app/requirements.txt /app/requirements.txt
+# Install common module dependencies first
+COPY common/requirements.txt /app/common-requirements.txt
 RUN pip install --upgrade pip setuptools wheel
+RUN pip install -r /app/common-requirements.txt
+
+# Optional: requirements (skip if you don't have any)
+COPY profile/app/requirements.txt /app/requirements.txt
 RUN if [ -s /app/requirements.txt ]; then pip install -r /app/requirements.txt; fi
 
+# Copy common services module
+COPY common /app/services/common/
+
 # Copy code
-COPY app/ /app/
+COPY profile/app/ /app/
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser appuser \

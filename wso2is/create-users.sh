@@ -10,7 +10,7 @@ echo "=========================================="
 
 # Wait for WSO2 IS to be ready
 echo "Waiting for WSO2 IS to be ready..."
-WSO2_HOST="https://wso2is:9444"
+WSO2_HOST="https://wso2is:9443"
 
 until curl -k -sf ${WSO2_HOST}/carbon/admin/login.jsp > /dev/null 2>&1; do
     echo "Waiting for WSO2 IS..."
@@ -62,7 +62,7 @@ create_user() {
         # Create user via SCIM2 API
         CREATE_RESPONSE=$(curl -k -s -w "\n%{http_code}" -X POST "${WSO2_HOST}/scim2/Users" \
             -u "${ADMIN_USER}:${ADMIN_PASS}" \
-            -H "Content-Type: application/json" \
+            -H "Content-Type: application/scim+json" \
             -d "{
                 \"schemas\": [\"urn:ietf:params:scim:schemas:core:2.0:User\"],
                 \"userName\": \"${username}\",
@@ -74,15 +74,19 @@ create_user() {
                 \"emails\": [{
                     \"value\": \"${username}@innover.local\",
                     \"primary\": true
-                }]
+                }],
+                \"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User\": {}
             }")
         
         HTTP_CODE=$(echo "$CREATE_RESPONSE" | tail -n1)
+        RESPONSE_BODY=$(echo "$CREATE_RESPONSE" | head -n -1)
         
         if [ "$HTTP_CODE" = "201" ]; then
             echo "✓ User '$username' created successfully"
         else
             echo "⚠️  Failed to create user '$username'. HTTP code: $HTTP_CODE"
+            echo "Response: $RESPONSE_BODY" | head -c 200
+            echo ""
         fi
     else
         echo "✓ User '$username' already exists"
@@ -102,14 +106,15 @@ create_role "auditor"
 create_role "user"
 
 # Financial Services Users
+# Passwords meet WSO2 IS policy: min 8 chars, 1 digit
 echo ""
 echo "Creating Financial Services Users..."
 echo "=========================================="
 create_user "admin" "admin" "admin"
-create_user "ops_user" "ops_user" "ops_user"
-create_user "finance" "finance" "finance"
-create_user "auditor" "auditor" "auditor"
-create_user "user" "user" "user"
+create_user "ops_user" "OpsUser123" "ops_user"
+create_user "finance" "Finance123" "finance"
+create_user "auditor" "Auditor123" "auditor"
+create_user "user" "User1234" "user"
 
 echo ""
 echo "=========================================="
@@ -117,12 +122,12 @@ echo "✅ WSO2 IS User Setup Complete!"
 echo "=========================================="
 echo ""
 echo "📋 Created Users (Financial-grade):"
-echo "   • admin@innover.local (Admin)"
-echo "   • ops_user@innover.local (Operations)"
-echo "   • finance@innover.local (Finance)"
-echo "   • auditor@innover.local (Auditor - PCI-DSS)"
-echo "   • user@innover.local (Standard User)"
+echo "   • admin@innover.local (Admin) - Password: admin"
+echo "   • ops_user@innover.local (Operations) - Password: OpsUser123"
+echo "   • finance@innover.local (Finance) - Password: Finance123"
+echo "   • auditor@innover.local (Auditor - PCI-DSS) - Password: Auditor123"
+echo "   • user@innover.local (Standard User) - Password: User1234"
 echo ""
-echo "🔐 All passwords are set to the username"
+echo "🔐 Change passwords in production!"
 echo "✅ PCI-DSS Compliant | Audit-ready"
 echo ""
