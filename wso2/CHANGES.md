@@ -1,5 +1,12 @@
 # WSO2 Initialization Fix - Changes Summary
 
+## 2025-02-14 - Automated WSO2 IS Key Manager Enablement
+
+- Set the external WSO2 IS key manager to enabled by default in `deployment.toml` with complete OpenID Connect metadata.
+- Added an idempotent Admin REST helper (`enable_wso2is_keymanager.py`) that creates the key manager configuration if it is missing and updates it when disabled.
+- Wired the setup container to call the helper automatically before provisioning APIs so the admin experience requires no manual toggles.
+- Documented the grant types, issuer, and JWKS endpoints to align with the multi-role user bootstrap supplied by `wso2is/create-users.sh`.
+
 ## Problem
 
 WSO2 API Manager initialization was failing with:
