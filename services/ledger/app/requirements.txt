@@ -1,3 +1,4 @@
 celery[redis]==5.4.0
 fastapi==0.111.0
+python-jose[cryptography]==3.3.0
 uvicorn[standard]==0.30.1
