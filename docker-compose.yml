@@ -100,24 +100,24 @@ services:
     networks: [edge]
 
   wso2am:
-    image: wso2/wso2am:4.6.0-alpha3
+    image: wso2/wso2am:4.5.0-alpine
     environment:
-      JVM_MEM_OPTS: "-Xms512m -Xmx1024m"
       <<: *svc_env
-      # OVERRIDE issuer to the sslip.io hostname (EXACT match with Keycloak):
       OIDC_ISSUER: ${OIDC_ISSUER:-https://auth.127.0.0.1.sslip.io/realms/innover}
     ports:
       - "8280:8280"
+      - "8243:8243"
       - "9443:9443"
     volumes:
-      - wso2am-data:/home/wso2carbon/wso2am-4.6.0-alpha3/repository
+      - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
+      - ./wso2/deployment.toml:/home/wso2carbon/wso2am-4.5.0/repository/conf/deployment.toml:ro
     extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD-SHELL", "curl -k -f https://localhost:9443/services/Version || exit 1"]
+      test: ["CMD-SHELL", "wget --no-check-certificate --spider --quiet https://localhost:9443/services/Version || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 20
-      start_period: 180s
+      retries: 30
+      start_period: 240s
     deploy: *support_deploy
     depends_on:
       keycloak:
@@ -162,39 +162,19 @@ services:
     container_name: wso2-setup
     environment:
       WSO2_HOST: https://wso2am:9443
-      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
-      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
+      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME:-admin}
+      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD:-admin}
       API_CONFIG_FILE: /config/api-config.yaml
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD}
+      # CRITICAL: Keycloak needs internal hostname from Docker network
+      KEYCLOAK_ISSUER: https://auth.127.0.0.1.sslip.io/realms/innover
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:-admin}
     entrypoint: ["python3", "/app/setup.py"]
     volumes:
       - ./wso2/api-config.yaml:/config/api-config.yaml:ro
       - ./wso2/output:/config
     depends_on:
       wso2am:
-        condition: service_healthy
-      keycloak:
-        condition: service_healthy
-    extra_hosts: *extra_hosts
-    restart: "no"
-    networks: [edge]
-
-  keycloak-km-setup:
-    build:
-      context: ./wso2
-    container_name: keycloak-km-setup
-    entrypoint: ["python3", "/app/configure-keycloak-km.py"]
-    environment:
-      WSO2_HOST: https://wso2am:9443
-      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME}
-      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD}
-      KEYCLOAK_ISSUER: ${KEYCLOAK_ISSUER}
-      KEYCLOAK_KM_CLIENT_ID: ${KEYCLOAK_KM_CLIENT_ID}
-      KEYCLOAK_KM_CLIENT_SECRET: ${KEYCLOAK_KM_CLIENT_SECRET}
-    depends_on:
-      wso2am:
-        condition: service_healthy
+        condition: service_started  # Changed from service_healthy - setup.py has built-in retry logic
       keycloak:
         condition: service_healthy
     extra_hosts: *extra_hosts

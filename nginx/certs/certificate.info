@@ -1,5 +1,5 @@
-GENERATED_DATE=2025-10-05T06:02:38+00:00
+GENERATED_DATE=2025-10-05T18:44:20+00:00
 DOMAINS=auth.127.0.0.1.sslip.io,localhost,127.0.0.1
-notBefore=Oct  5 06:02:38 2025 GMT
-notAfter=Jan  5 06:02:38 2028 GMT
-subject=O=mkcert development certificate, OU=root@20079c1cbce2
+notBefore=Oct  5 18:44:19 2025 GMT
+notAfter=Jan  5 18:44:19 2028 GMT
+subject=O=mkcert development certificate, OU=root@804bb0efcf45
