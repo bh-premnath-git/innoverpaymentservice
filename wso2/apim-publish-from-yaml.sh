@@ -48,14 +48,26 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
   exit 1
 fi
 
-AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
-
 pub="${AM_BASE}/api/am/publisher/v4"
 dev="${AM_BASE}/api/am/devportal/v3"
 
+# Helper: call API and capture HTTP status + body
+call() {
+  local method="$1" url="$2" body="${3:-}"
+  local tmp="$(mktemp)"
+  local code
+  if [ -n "$body" ]; then
+    code=$(curl -sk -X "$method" "$url" "${AUTH_HDR[@]}" -d "$body" -o "$tmp" -w '%{http_code}')
+  else
+    code=$(curl -sk -X "$method" "$url" "${AUTH_HDR[@]}" -o "$tmp" -w '%{http_code}')
+  fi
+  echo "$code" "$tmp"
+}
+
 get_api_id_by_name() {
   local name="$1"
-  curl -sk "${pub}/apis?query=name:${name}" "${AUTH_HDR[@]}" | jq -r '.list[0].id // empty'
+  curl -sk -H "Authorization: Bearer ${AUTH_TOKEN}" \
+    "${pub}/apis?query=name:${name}" | jq -r '.list[0].id // empty'
 }
 
 create_api() {
@@ -63,42 +75,70 @@ create_api() {
   echo "  - creating API ${name}"
   local payload
   payload="$(jq -nc --arg name "$name" --arg ctx "$ctx" --arg ver "$ver" --arg be "$be" --arg desc "$desc" \
-    --argjson tags "$tags_json" '
-    {
-      name: $name,
-      context: $ctx,
-      version: $ver,
-      type: "HTTP",
-      description: $desc,
-      tags: $tags,
-      endpointConfig: {
-        endpoint_type: "http",
-        sandbox_endpoints: { url: $be },
-        production_endpoints: { url: $be }
+    --argjson tags "$tags_json" '{
+      name:$name,
+      context:$ctx,
+      version:$ver,
+      type:"HTTP",
+      description:$desc,
+      tags:$tags,
+      endpointConfig:{
+        endpoint_type:"http",
+        sandbox_endpoints:{url:$be},
+        production_endpoints:{url:$be}
       },
-      transport: ["http","https"],
-      policies: ["Unlimited"],
-      operations: [
+      transport:["http","https"],
+      policies:["Unlimited"],
+      apiThrottlingPolicy:"Unlimited",
+      operations:[
         {target:"/*", verb:"GET",    throttlingPolicy:"Unlimited", authType:"Application & Application User"},
         {target:"/*", verb:"POST",   throttlingPolicy:"Unlimited", authType:"Application & Application User"},
         {target:"/*", verb:"PUT",    throttlingPolicy:"Unlimited", authType:"Application & Application User"},
         {target:"/*", verb:"DELETE", throttlingPolicy:"Unlimited", authType:"Application & Application User"}
       ]
     }')"
-  curl -sk "${pub}/apis" "${AUTH_HDR[@]}" -d "${payload}" | jq -r '.id'
+  
+  read -r code tmp < <(call POST "${pub}/apis" "$payload")
+  if [ "$code" != "201" ]; then
+    echo "  !! Create failed (HTTP ${code})"
+    echo "     Response:"; jq . "$tmp" 2>/dev/null || cat "$tmp"
+    rm -f "$tmp"; return 1
+  fi
+  jq -r '.id' "$tmp"; rm -f "$tmp"
 }
 
 deploy_and_publish() {
   local api_id="$1"
+  
   echo "  - creating revision"
+  read -r code tmp < <(call POST "${pub}/apis/${api_id}/revisions" '{"description":"initial"}')
+  if [ "$code" != "201" ]; then
+    echo "  !! Revision failed (HTTP ${code})"
+    jq . "$tmp" 2>/dev/null || cat "$tmp"
+    rm -f "$tmp"; return 1
+  fi
   local rev_id
-  rev_id="$(curl -sk "${pub}/apis/${api_id}/revisions" "${AUTH_HDR[@]}" -d '{"description":"initial"}' | jq -r '.id // .revisionId // .revisionUUID')"
+  rev_id="$(jq -r '.id // .revisionId // .revisionUUID' "$tmp")"; rm -f "$tmp"
+  
   echo "  - deploying revision ${rev_id} to Default@${VHOST}"
   local dep_payload
   dep_payload="$(jq -nc --arg rid "$rev_id" --arg vhost "$VHOST" '[{revisionUuid:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
-  curl -sk "${pub}/apis/${api_id}/deploy-revision" "${AUTH_HDR[@]}" -d "${dep_payload}" >/dev/null
+  read -r code tmp < <(call POST "${pub}/apis/${api_id}/deploy-revision" "$dep_payload")
+  if [ "$code" != "201" ] && [ "$code" != "200" ]; then
+    echo "  !! Deploy failed (HTTP ${code})"
+    jq . "$tmp" 2>/dev/null || cat "$tmp"
+    rm -f "$tmp"; return 1
+  fi
+  rm -f "$tmp"
+  
   echo "  - publishing API"
-  curl -sk "${pub}/apis/change-lifecycle?apiId=${api_id}&action=Publish" "${AUTH_HDR[@]}" -X POST >/dev/null
+  read -r code tmp < <(call POST "${pub}/apis/change-lifecycle?apiId=${api_id}&action=PUBLISH" '{}')
+  if [ "$code" != "200" ]; then
+    echo "  !! Publish failed (HTTP ${code})"
+    jq . "$tmp" 2>/dev/null || cat "$tmp"
+    rm -f "$tmp"; return 1
+  fi
+  rm -f "$tmp"
 }
 
 # ---------- Parse YAML and create APIs ----------

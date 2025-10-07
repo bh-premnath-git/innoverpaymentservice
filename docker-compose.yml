@@ -117,31 +117,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: "2.00"
-          memory: 2G
+    deploy: *db_deploy
     restart: unless-stopped
-    networks: [edge]
-
-  cockroach-init:
-    image: cockroachdb/cockroach:v24.2.4
-    environment:
-      DB_NAME: ${DB_NAME}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-    depends_on:
-      cockroach1:
-        condition: service_healthy
-    command: >
-      bash -c "
-        /cockroach/cockroach sql --insecure --host=$${DB_HOST}:$${DB_PORT} <<-EOSQL
-          CREATE DATABASE IF NOT EXISTS $${DB_NAME};
-        EOSQL
-        echo 'Database $${DB_NAME} initialized successfully'
-      "
-    restart: "no"
     networks: [edge]
 
   jaeger:
