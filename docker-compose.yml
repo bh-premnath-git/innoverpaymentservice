@@ -48,16 +48,15 @@ services:
     environment:
       <<: *svc_env
       # Admin credentials for user initialization
-      WSO2_IS_ADMIN_USERNAME: ${WSO2_IS_ADMIN_USERNAME:-admin}
-      WSO2_IS_ADMIN_PASSWORD: ${WSO2_IS_ADMIN_PASSWORD:-admin}
+      IS_ADMIN_USER: ${WSO2_IS_ADMIN_USERNAME:-admin}
+      IS_ADMIN_PASS: ${WSO2_IS_ADMIN_PASSWORD:-admin}
     ports:
-      - "9444:9443"  # HTTPS port for Identity Server (external:internal)
+      - "9444:9443"  # HTTPS port for Identity Server (9444 external, 9443 internal)
     volumes:
       - wso2is-data:/home/wso2carbon/wso2is-7.1.0/repository
-      - ./wso2is/deployment.toml:/home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml:ro
     extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD-SHELL", "curl -k -sf https://localhost:9443/carbon/admin/login.jsp || exit 1"]
+      test: ["CMD-SHELL", "curl -k -sf https://localhost:9443/api/health-check/v1.0/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 30
@@ -71,67 +70,37 @@ services:
     networks: [edge]
 
   wso2am:
-    image: wso2/wso2am:4.5.0-alpine
+    build:
+      context: ./wso2
+      dockerfile: wso2am.Dockerfile
     environment:
       <<: *svc_env
       OIDC_ISSUER: ${OIDC_ISSUER:-https://localhost:9444/oauth2/token}
+      AM_ADMIN_USER: ${WSO2_ADMIN_USERNAME:-admin}
+      AM_ADMIN_PASS: ${WSO2_ADMIN_PASSWORD:-admin}
+      GW_HOST: ${GATEWAY_HOST:-localhost}
+      GW_PORT: "8243"
+      VHOST: localhost
     ports:
       - "8280:8280"
       - "8243:8243"
       - "9443:9443"
     volumes:
       - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
-      - ./wso2/deployment.toml:/home/wso2carbon/wso2am-4.5.0/repository/conf/deployment.toml:ro
+      - ./wso2/api-config.yaml:/config/api-config.yaml:ro
+      - ./wso2/output:/config
     extra_hosts: *extra_hosts
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-check-certificate --spider --quiet https://localhost:9443/services/Version || exit 1"]
+      test: ["CMD-SHELL", "pgrep java > /dev/null || exit 1"]
       interval: 20s
       timeout: 15s
       retries: 50
-      start_period: 420s  # Increased to 7 minutes for first-time initialization
+      start_period: 480s  # Increased to 8 minutes for first-time initialization + API setup
     deploy: *support_deploy
     depends_on:
       wso2is:
-        condition: service_healthy  # Wait for WSO2 IS to be fully ready
-    restart: unless-stopped
-    networks: [edge]
-
-  wso2is-init:
-    build:
-      context: ./wso2is
-    container_name: wso2is-init
-    environment:
-      WSO2_IS_ADMIN_USERNAME: ${WSO2_IS_ADMIN_USERNAME:-admin}
-      WSO2_IS_ADMIN_PASSWORD: ${WSO2_IS_ADMIN_PASSWORD:-admin}
-    entrypoint: ["/bin/bash", "/home/wso2carbon/create-users.sh"]
-    depends_on:
-      wso2is:
         condition: service_healthy
-    extra_hosts: *extra_hosts
-    restart: "no"
-    networks: [edge]
-
-  wso2-setup:
-    build:
-      context: ./wso2
-    container_name: wso2-setup
-    environment:
-      WSO2_HOST: https://wso2am:9443
-      WSO2_IS_HOST: https://wso2is:9443
-      WSO2_ADMIN_USERNAME: ${WSO2_ADMIN_USERNAME:-admin}
-      WSO2_ADMIN_PASSWORD: ${WSO2_ADMIN_PASSWORD:-admin}
-      API_CONFIG_FILE: /config/api-config.yaml
-    entrypoint: ["python3", "/app/setup.py"]
-    volumes:
-      - ./wso2/api-config.yaml:/config/api-config.yaml:ro
-      - ./wso2/output:/config
-    depends_on:
-      wso2am:
-        condition: service_healthy  # Wait for WSO2AM to be fully healthy
-      wso2is-init:
-        condition: service_completed_successfully
-    extra_hosts: *extra_hosts
-    restart: "no"
+    restart: unless-stopped
     networks: [edge]
 
   cockroach1:
