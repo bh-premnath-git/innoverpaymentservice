@@ -26,6 +26,8 @@ AM_ADMIN_PASS="${AM_ADMIN_PASS:-admin}"
 GW_HOST="${GW_HOST:-${AM_HOST}}"
 GW_PORT="${GW_PORT:-8243}"
 VHOST="${VHOST:-localhost}"
+KEY_MANAGER_NAME="${KEY_MANAGER_NAME:-Resident Key Manager}"  # Use "WSO2-IS" for external IS
+KM_TOKEN_ENDPOINT="${KM_TOKEN_ENDPOINT:-https://wso2is:9443/oauth2/token}"  # Token endpoint for external KM
 
 # ---------- DCR for REST API access ----------
 echo "▶ Registering API-M REST client (DCR)"
@@ -48,6 +50,9 @@ if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
   exit 1
 fi
 
+# Set up auth headers for API calls
+AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
+
 pub="${AM_BASE}/api/am/publisher/v4"
 dev="${AM_BASE}/api/am/devportal/v3"
 
@@ -66,8 +71,9 @@ call() {
 
 get_api_id_by_name() {
   local name="$1"
-  curl -sk -H "Authorization: Bearer ${AUTH_TOKEN}" \
-    "${pub}/apis?query=name:${name}" | jq -r '.list[0].id // empty'
+  # URL-encode query to handle API names with spaces and special characters
+  curl -sk --get "${pub}/apis" -H "Authorization: Bearer ${TOKEN}" \
+    --data-urlencode "query=name:${name}" | jq -r '.list[0].id // empty'
 }
 
 create_api() {
@@ -178,15 +184,35 @@ set -e
 echo ""
 echo "✅ API creation phase complete"
 
-# ---------- Create application ----------
+# ---------- Create application (idempotent, handle 409) ----------
 APP_NAME="$(yq eval '.application.name' "$CFG")"
 APP_TIER="$(yq eval '.application.throttling_policy' "$CFG")"
 echo "▶ Ensuring application '${APP_NAME}'"
-APP_ID="$(curl -sk "${dev}/applications?query=name:${APP_NAME}" "${AUTH_HDR[@]}" | jq -r '.list[0].applicationId // empty')"
+APP_QRY="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}" --get --data-urlencode "query=name:${APP_NAME}")"
+APP_ID="$(echo "$APP_QRY" | jq -r '.list[0].applicationId // empty')"
+
 if [ -z "${APP_ID}" ]; then
-  APP_ID="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}" -d @- | jq -r '.applicationId')"<<EOF
-{"name":"${APP_NAME}","throttlingPolicy":"${APP_TIER}","description":"autocreated","tokenType":"JWT","groups":[],"attributes":{}}
-EOF
+  APP_PAYLOAD='{"name":"'"${APP_NAME}"'","throttlingPolicy":"'"${APP_TIER}"'","description":"autocreated","tokenType":"JWT","groups":[],"attributes":{}}'
+  # Try create, tolerate 409 (already exists)
+  TMP="$(mktemp)"
+  CODE=$(curl -sk -o "$TMP" -w '%{http_code}' "${dev}/applications" "${AUTH_HDR[@]}" -d "${APP_PAYLOAD}")
+  if [ "$CODE" = "201" ]; then
+    APP_ID="$(jq -r '.applicationId' "$TMP")"
+    echo "  - created application"
+  elif [ "$CODE" = "409" ]; then
+    # Already exists (e.g., DefaultApplication) → read again
+    echo "  - application already exists, fetching ID"
+    APP_QRY="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}" --get --data-urlencode "query=name:${APP_NAME}")"
+    APP_ID="$(echo "$APP_QRY" | jq -r '.list[0].applicationId // empty')"
+  else
+    echo "!! applications POST failed (HTTP ${CODE})"
+    jq . "$TMP" 2>/dev/null || cat "$TMP"
+    rm -f "$TMP"
+    exit 1
+  fi
+  rm -f "$TMP"
+else
+  echo "  - application found"
 fi
 echo "  - applicationId=${APP_ID}"
 
@@ -203,12 +229,12 @@ for i in $(seq 0 $((SUBS_LEN-1))); do
 done
 
 # ---------- Generate keys ----------
-echo "▶ Generating PRODUCTION keys for ${APP_NAME}"
-GEN_RESP="$(curl -sk "${dev}/applications/${APP_ID}/generate-keys" "${AUTH_HDR[@]}" -d @- <<'EOF'
+echo "▶ Generating PRODUCTION keys for ${APP_NAME} (Key Manager: ${KEY_MANAGER_NAME})"
+GEN_RESP="$(curl -sk "${dev}/applications/${APP_ID}/generate-keys" "${AUTH_HDR[@]}" -d @- <<EOF
 {
   "keyType": "PRODUCTION",
-  "keyManager": "Resident Key Manager",
-  "grantTypesToBeSupported": ["password","client_credentials","refresh_token"],
+  "keyManager": "${KEY_MANAGER_NAME}",
+  "grantTypesToBeSupported": ["client_credentials","password","refresh_token"],
   "callbackUrl": "https://localhost/cb",
   "scopes": []
 }
@@ -227,6 +253,14 @@ if [ -z "${CK_APP}" ] || [ -z "${CS_APP}" ]; then
 fi
 echo "  - consumerKey=${CK_APP}"
 
+# Determine correct token endpoint based on Key Manager
+if [ "${KEY_MANAGER_NAME}" = "Resident Key Manager" ]; then
+  TOKEN_EP="${AM_BASE}/oauth2/token"
+else
+  TOKEN_EP="${KM_TOKEN_ENDPOINT}"
+fi
+echo "  - tokenEndpoint=${TOKEN_EP}"
+
 # Save keys to JSON file
 cat > /config/application-keys.json <<EOF
 {
@@ -235,7 +269,8 @@ cat > /config/application-keys.json <<EOF
   "production": {
     "consumerKey": "${CK_APP}",
     "consumerSecret": "${CS_APP}",
-    "keyManager": "Resident Key Manager"
+    "keyManager": "${KEY_MANAGER_NAME}",
+    "tokenEndpoint": "${TOKEN_EP}"
   }
 }
 EOF
@@ -254,12 +289,18 @@ echo "  Consumer Key: ${CK_APP}"
 echo ""
 echo "🌐 Sample invocation (Gateway https://${GW_HOST}:${GW_PORT}):"
 echo ""
+echo "# Get token from ${KEY_MANAGER_NAME}"
+echo "# Using client_credentials grant (recommended for service-to-service)"
+echo "TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=client_credentials' ${TOKEN_EP} | jq -r .access_token)"
+echo ""
+echo "# Or using password grant (requires user credentials):"
+echo "# TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=password&username=admin&password=admin' ${TOKEN_EP} | jq -r .access_token)"
+echo ""
 for i in $(seq 0 $((APIS_LEN-1))); do
   name="$(yq eval ".rest_apis[$i].name" "$CFG")"
   ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
   ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
   echo "# ${name}"
-  echo "TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=password&username=admin&password=admin' ${AM_BASE}/oauth2/token | jq -r .access_token)"
   echo "curl -sk -H \"Authorization: Bearer \$TOKEN\" https://${GW_HOST}:${GW_PORT}${ctx}/${ver}/health"
   echo ""
 done

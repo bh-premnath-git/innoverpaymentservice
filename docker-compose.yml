@@ -72,7 +72,6 @@ services:
   wso2am:
     build:
       context: ./wso2
-      dockerfile: wso2am.Dockerfile
     environment:
       <<: *svc_env
       OIDC_ISSUER: ${OIDC_ISSUER:-https://localhost:9444/oauth2/token}

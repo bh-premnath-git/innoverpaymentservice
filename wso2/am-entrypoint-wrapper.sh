@@ -6,22 +6,53 @@ echo "▶ Starting WSO2 API Manager..."
 /home/wso2carbon/wso2am-4.5.0/bin/api-manager.sh &
 AM_PID=$!
 
-# Wait for API-M to be ready
-echo "▶ Waiting for WSO2 API-M to be ready (this may take several minutes)..."
+# Wait for API-M to be ready (proper health checks)
+echo "▶ Waiting for WSO2 API-M server to start..."
 MAX_WAIT=600
 ELAPSED=0
-until curl -k -sf https://localhost:9443/publisher >/dev/null 2>&1; do
+
+# Step 1: Wait for server to be up
+until curl -k -sf https://localhost:9443/services/Version >/dev/null 2>&1; do
   if [ $ELAPSED -ge $MAX_WAIT ]; then
-    echo "❌ API-M did not start in time"
+    echo "❌ API-M server did not start in time"
     exit 1
   fi
   sleep 10
   ELAPSED=$((ELAPSED + 10))
-  echo "  ... waiting ($ELAPSED/${MAX_WAIT}s)"
+  echo "  ... waiting for server ($ELAPSED/${MAX_WAIT}s)"
 done
+echo "  ✓ Server is up"
 
-echo "✅ WSO2 API-M is ready"
-sleep 20  # Extra stabilization time
+# Step 2: Wait for Gateway to be ready for deployment
+echo "▶ Waiting for Gateway deployment readiness..."
+ELAPSED=0
+until curl -k -sf https://localhost:9443/api/am/gateway/v2/server-startup-healthcheck >/dev/null 2>&1; do
+  if [ $ELAPSED -ge $MAX_WAIT ]; then
+    echo "⚠️  Gateway health check timeout, proceeding anyway"
+    break
+  fi
+  sleep 10
+  ELAPSED=$((ELAPSED + 10))
+  echo "  ... waiting for gateway ($ELAPSED/${MAX_WAIT}s)"
+done
+echo "  ✓ Gateway is ready"
+
+# Step 3: Wait for Publisher API to be responsive
+echo "▶ Waiting for Publisher API..."
+ELAPSED=0
+until curl -k -sf https://localhost:9443/publisher >/dev/null 2>&1; do
+  if [ $ELAPSED -ge 120 ]; then
+    echo "⚠️  Publisher timeout, proceeding anyway"
+    break
+  fi
+  sleep 5
+  ELAPSED=$((ELAPSED + 5))
+  echo "  ... waiting for publisher ($ELAPSED/120s)"
+done
+echo "  ✓ Publisher is ready"
+
+echo "✅ WSO2 API-M is fully ready"
+sleep 10  # Brief stabilization time
 
 # Run API setup if config file exists
 if [ -f "/config/api-config.yaml" ]; then

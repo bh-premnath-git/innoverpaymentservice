@@ -657,6 +657,53 @@ Users are automatically created by the `wso2is-init` container on first startup.
 - ✅ API versioning and lifecycle
 - ✅ Analytics and monitoring
 
+### WSO2 IS as External Key Manager
+
+**Advanced Integration: IS 7.1.0 ↔ API-M 4.5.0**
+
+This platform supports using WSO2 Identity Server as an **external Key Manager** for API Manager, enabling centralized token management and enhanced security.
+
+**Default Setup (Resident Key Manager):**
+- API-M issues tokens using its built-in OAuth2 server
+- Good for simple deployments and development
+
+**Advanced Setup (WSO2 IS as Key Manager):**
+- WSO2 IS issues and manages all OAuth2 tokens
+- Centralized identity and access management
+- Token revocation events sent from IS to API-M
+- Enhanced security and compliance features
+
+📚 **[Complete Integration Guide](wso2/WSO2-IS-APIM-INTEGRATION.md)**
+
+**Quick Setup:**
+```bash
+# 1. Exchange TLS certificates between containers
+cd wso2
+./exchange-certs.sh
+
+# 2. Restart both containers
+docker restart innover-wso2is-1 innover-wso2am-1
+
+# 3. Register IS as Key Manager
+./register-keymanager.sh
+
+# 4. Generate application keys using IS
+KEY_MANAGER_NAME="WSO2-IS" ./apim-publish-from-yaml.sh /config/api-config.yaml
+```
+
+**Key Benefits:**
+- ✅ Centralized user and token management
+- ✅ Token revocation notifications to API-M
+- ✅ Cross-tenant SCIM2 access for UserInfo
+- ✅ Consistent identity across multiple API-M instances
+- ✅ Enhanced audit trail for compliance
+
+**When to Use:**
+- Multiple API-M instances sharing identity
+- Enterprise SSO requirements
+- Advanced security policies
+- Regulatory compliance needs (PCI-DSS, SOC2, etc.)
+
 ### PCI-DSS Compliance Features
 
 - ✅ **Strong Authentication**: Multi-factor ready, financial-grade OAuth2

@@ -1,0 +1,44 @@
+# WSO2 Identity Server 7.1.0 - APIM Key Manager Integration Configuration
+# This file extends the default deployment.toml for WSO2 IS to enable integration
+# with WSO2 API Manager 4.5.0 as an external Key Manager
+
+# =============================================================================
+# OAuth Configuration
+# =============================================================================
+[oauth]
+# Allow APIM to authorize all scopes for token issuance
+authorize_all_scopes = true
+
+# =============================================================================
+# Resource Access Control
+# =============================================================================
+# Allow APIM to read /scim2/Me cross-tenant (used as UserInfo endpoint)
+[[resource.access_control]]
+context = "(.*)/scim2/Me"
+secure = true
+http_method = "GET"
+cross_tenant = true
+permissions = []
+scopes = []
+
+# =============================================================================
+# Token Revocation Event Listener
+# =============================================================================
+# Send token revocation events to APIM
+[[event_listener]]
+id = "token_revocation"
+type = "org.wso2.carbon.identity.core.handler.AbstractIdentityHandler"
+name = "org.wso2.is.notification.ApimOauthEventInterceptor"
+order = 1
+[event_listener.properties]
+notification_endpoint = "https://wso2am:9443/internal/data/v1/notify"
+username = "${admin.username}"
+password = "${admin.password}"
+'header.X-WSO2-KEY-MANAGER' = "WSO2-IS"
+
+# =============================================================================
+# Role Management
+# =============================================================================
+# Allow APIM to create roles in IS7 using system_primary_* names
+[role_mgt]
+allow_system_prefix_for_role = true
