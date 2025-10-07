@@ -38,8 +38,16 @@ CS="$(echo "$DCR_RESP" | jq -r '.clientSecret // .client_secret')"
 
 echo "▶ Getting admin access token (password grant)"
 SCOPES="apim:api_view apim:api_create apim:api_publish apim:tier_view apim:app_manage apim:sub_manage apim:subscribe"
-TOKEN="$(curl -sk -u "${CK}:${CS}" -d "grant_type=password&username=${AM_ADMIN_USER}&password=${AM_ADMIN_PASS}&scope=${SCOPES}" \
-  "${AM_BASE}/oauth2/token" | jq -r '.access_token')"
+TOKEN_RESP="$(curl -sk -u "${CK}:${CS}" -d "grant_type=password&username=${AM_ADMIN_USER}&password=${AM_ADMIN_PASS}&scope=${SCOPES}" \
+  "${AM_BASE}/oauth2/token")"
+TOKEN="$(echo "$TOKEN_RESP" | jq -r '.access_token // empty')"
+
+if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+  echo "!! Token generation failed. Response:"
+  echo "$TOKEN_RESP" | jq .
+  exit 1
+fi
+
 AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
 
 pub="${AM_BASE}/api/am/publisher/v4"
@@ -94,27 +102,45 @@ deploy_and_publish() {
 }
 
 # ---------- Parse YAML and create APIs ----------
-APIS_LEN="$(yq '.rest_apis | length' "$CFG")"
+APIS_LEN="$(yq eval '.rest_apis | length' "$CFG")"
 echo "▶ Creating ${APIS_LEN} APIs from ${CFG}"
+
+# Temporarily disable exit on error for API creation loop
+set +e
 for i in $(seq 0 $((APIS_LEN-1))); do
-  name="$(yq -r ".rest_apis[$i].name" "$CFG")"
-  ctx="$(yq -r ".rest_apis[$i].context" "$CFG")"
-  ver="$(yq -r ".rest_apis[$i].version" "$CFG")"
-  be="$(yq -r ".rest_apis[$i].backend_url" "$CFG")"
-  desc="$(yq -r ".rest_apis[$i].description" "$CFG")"
-  tags_json="$(yq ".rest_apis[$i].tags" "$CFG" | jq -c '.')"
+  name="$(yq eval ".rest_apis[$i].name" "$CFG")"
+  ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
+  ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
+  be="$(yq eval ".rest_apis[$i].backend_url" "$CFG")"
+  desc="$(yq eval ".rest_apis[$i].description" "$CFG")"
+  tags_json="$(yq eval ".rest_apis[$i].tags" "$CFG" -o=json | jq -c '.')"
+  
+  echo "  [${i}/$((APIS_LEN-1))] Processing: ${name}"
+  
   api_id="$(get_api_id_by_name "${name}")"
   if [ -z "$api_id" ] || [ "$api_id" = "null" ]; then
+    echo "  - creating API ${name}"
     api_id="$(create_api "${name}" "${ctx}" "${ver}" "${be}" "${desc}" "${tags_json}")"
+    if [ -z "$api_id" ] || [ "$api_id" = "null" ]; then
+      echo "  !! Failed to create API ${name}"
+      continue
+    fi
+    echo "  - created with ID: ${api_id}"
   else
     echo "  - API ${name} exists (${api_id})"
   fi
-  deploy_and_publish "${api_id}"
+  
+  deploy_and_publish "${api_id}" || echo "  !! Failed to deploy/publish ${name}"
 done
+# Re-enable exit on error
+set -e
+
+echo ""
+echo "✅ API creation phase complete"
 
 # ---------- Create application ----------
-APP_NAME="$(yq -r '.application.name' "$CFG")"
-APP_TIER="$(yq -r '.application.throttling_policy' "$CFG")"
+APP_NAME="$(yq eval '.application.name' "$CFG")"
+APP_TIER="$(yq eval '.application.throttling_policy' "$CFG")"
 echo "▶ Ensuring application '${APP_NAME}'"
 APP_ID="$(curl -sk "${dev}/applications?query=name:${APP_NAME}" "${AUTH_HDR[@]}" | jq -r '.list[0].applicationId // empty')"
 if [ -z "${APP_ID}" ]; then
@@ -126,10 +152,10 @@ echo "  - applicationId=${APP_ID}"
 
 # ---------- Subscriptions ----------
 echo "▶ Subscribing ${APP_NAME} to APIs"
-SUBS_LEN="$(yq '.subscriptions | length' "$CFG")"
+SUBS_LEN="$(yq eval '.subscriptions | length' "$CFG")"
 for i in $(seq 0 $((SUBS_LEN-1))); do
-  s_name="$(yq -r ".subscriptions[$i].api_name" "$CFG")"
-  s_tier="$(yq -r ".subscriptions[$i].throttling_policy" "$CFG")"
+  s_name="$(yq eval ".subscriptions[$i].api_name" "$CFG")"
+  s_tier="$(yq eval ".subscriptions[$i].throttling_policy" "$CFG")"
   s_api="$(get_api_id_by_name "${s_name}")"
   if [ -z "${s_api}" ]; then echo "  ! API not found for subscription: ${s_name}"; continue; fi
   curl -sk "${dev}/subscriptions" "${AUTH_HDR[@]}" -d "{\"apiId\":\"${s_api}\",\"applicationId\":\"${APP_ID}\",\"throttlingPolicy\":\"${s_tier}\"}" >/dev/null 2>&1 || echo "  - already subscribed to ${s_name}"
@@ -189,9 +215,9 @@ echo ""
 echo "🌐 Sample invocation (Gateway https://${GW_HOST}:${GW_PORT}):"
 echo ""
 for i in $(seq 0 $((APIS_LEN-1))); do
-  name="$(yq -r ".rest_apis[$i].name" "$CFG")"
-  ctx="$(yq -r ".rest_apis[$i].context" "$CFG")"
-  ver="$(yq -r ".rest_apis[$i].version" "$CFG")"
+  name="$(yq eval ".rest_apis[$i].name" "$CFG")"
+  ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
+  ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
   echo "# ${name}"
   echo "TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=password&username=admin&password=admin' ${AM_BASE}/oauth2/token | jq -r .access_token)"
   echo "curl -sk -H \"Authorization: Bearer \$TOKEN\" https://${GW_HOST}:${GW_PORT}${ctx}/${ver}/health"

@@ -38,6 +38,12 @@ else
   echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
 fi
 
+echo ""
+echo "ℹ️  To integrate WSO2 IS as Key Manager:"
+echo "   Configure manually via Admin Portal: https://localhost:9443/admin"
+echo "   Settings > Key Managers > Add Key Manager"
+echo "   Use WSO2 IS endpoints (port 9443 from Docker network: https://wso2is:9443)"
+
 # Keep container running
 echo "✅ Setup complete, WSO2 API-M running"
 wait $AM_PID
