@@ -3,10 +3,39 @@
 # with WSO2 API Manager 4.5.0 as an external Key Manager
 
 # =============================================================================
+# Server Configuration
+# =============================================================================
+[server]
+hostname = "localhost"
+node_ip = "127.0.0.1"
+server_role = "default"
+
+[super_admin]
+username = "admin"
+password = "admin"
+create_admin_account = true
+
+# =============================================================================
+# Database Configuration
+# =============================================================================
+[database.identity_db]
+driver = "org.h2.Driver"
+url = "jdbc:h2:./repository/database/WSO2IDENTITY_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
+username = "wso2carbon"
+password = "wso2carbon"
+validationQuery = "SELECT 1"
+
+[database.shared_db]
+driver = "org.h2.Driver"
+url = "jdbc:h2:./repository/database/WSO2SHARED_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
+username = "wso2carbon"
+password = "wso2carbon"
+validationQuery = "SELECT 1"
+
+# =============================================================================
 # OAuth Configuration
 # =============================================================================
 [oauth]
-# Allow APIM to authorize all scopes for token issuance
 authorize_all_scopes = true
 
 # =============================================================================
@@ -42,3 +71,78 @@ password = "${admin.password}"
 # Allow APIM to create roles in IS7 using system_primary_* names
 [role_mgt]
 allow_system_prefix_for_role = true
+
+# =============================================================================
+# User Store Configuration
+# =============================================================================
+[user_store]
+type = "database_unique_id"
+
+# =============================================================================
+# Keystore Configuration
+# =============================================================================
+[keystore.primary]
+file_name = "wso2carbon.jks"
+password = "wso2carbon"
+alias = "wso2carbon"
+key_password = "wso2carbon"
+
+[keystore.internal]
+file_name = "wso2carbon.jks"
+password = "wso2carbon"
+alias = "wso2carbon"
+key_password = "wso2carbon"
+
+# =============================================================================
+# Truststore Configuration
+# =============================================================================
+[truststore]
+file_name = "client-truststore.jks"
+password = "wso2carbon"
+alias = "symmetric"
+
+# =============================================================================
+# Identity Provider Configuration
+# =============================================================================
+[identity_provider.mgt]
+enable = true
+
+# =============================================================================
+# Service Provider Configuration
+# =============================================================================
+[service_provider.mgt]
+enable = true
+
+# =============================================================================
+# SCIM Configuration
+# =============================================================================
+[scim]
+enable = true
+
+[scim.user]
+enable = true
+
+[scim.group]
+enable = true
+
+# =============================================================================
+# SAML Configuration
+# =============================================================================
+[saml]
+enable = true
+
+# =============================================================================
+# Event Handlers
+# =============================================================================
+[event.default_listener.identity_mgt]
+priority = 50
+enable = true
+
+[event.default_listener.governance_identity_mgt]
+priority = 95
+enable = true
+
+[event.default_listener.governance_identity_store]
+priority = 97
+enable = true
+
