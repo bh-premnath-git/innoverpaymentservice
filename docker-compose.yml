@@ -81,6 +81,12 @@ services:
       GW_HOST: ${GATEWAY_HOST:-localhost}
       GW_PORT: "8243"
       VHOST: localhost
+      # POST_STABILIZE_WAIT: Wait time (seconds) after Publisher API GET ready before starting POST operations (revisions, deployments)
+      # Increase if seeing "Revision failed (HTTP 000)" errors. Set to 0 to skip wait.
+      POST_STABILIZE_WAIT: ${POST_STABILIZE_WAIT:-50}
+      # AUTO_PUBLISH_APIS: Set to 'true' to automatically publish APIs on startup. Set to 'false' to publish manually.
+      # Manual publishing recommended for production: docker exec innover-wso2am-1 /home/wso2carbon/publish-apis-manual.sh
+      AUTO_PUBLISH_APIS: ${AUTO_PUBLISH_APIS:-false}
     ports:
       - "8280:8280"
       - "8243:8243"

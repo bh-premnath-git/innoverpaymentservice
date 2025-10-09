@@ -83,19 +83,39 @@ for i in {1..5}; do
 done
 
 # ============================================================================
-# Step 2: Publish APIs from YAML configuration
+# Step 2: Publish APIs from YAML configuration (Optional - can be run manually)
 # ============================================================================
-if [ -f "/config/api-config.yaml" ]; then
-  echo ""
-  echo "▶ Running API setup (modular version)..."
-  AM_HOST=localhost \
-  AM_PORT=9443 \
-  AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
-  AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
-  KEY_MANAGER_NAME="WSO2-IS" \
-  /home/wso2carbon/apim-publish-from-yaml.sh /config/api-config.yaml || echo "⚠️  API setup failed"
+AUTO_PUBLISH_APIS="${AUTO_PUBLISH_APIS:-false}"
+
+if [ "${AUTO_PUBLISH_APIS}" = "true" ]; then
+  if [ -f "/config/api-config.yaml" ]; then
+    echo ""
+    echo "▶ Running automatic API setup..."
+    AM_HOST=localhost \
+    AM_PORT=9443 \
+    AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
+    AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
+    KEY_MANAGER_NAME="WSO2-IS" \
+    POST_STABILIZE_WAIT="${POST_STABILIZE_WAIT:-50}" \
+    /home/wso2carbon/apim-publish-from-yaml.sh /config/api-config.yaml || echo "⚠️  API setup failed"
+  else
+    echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
+  fi
 else
-  echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "ℹ️  Automatic API publishing is DISABLED"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+  echo "To publish APIs manually, run:"
+  echo "  docker exec innover-wso2am-1 /home/wso2carbon/publish-apis-manual.sh"
+  echo ""
+  echo "Or from host:"
+  echo "  docker compose exec wso2am /home/wso2carbon/publish-apis-manual.sh"
+  echo ""
+  echo "To enable automatic publishing on startup, set:"
+  echo "  AUTO_PUBLISH_APIS=true"
+  echo ""
 fi
 
 echo ""

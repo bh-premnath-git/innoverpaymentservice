@@ -38,36 +38,27 @@ CK="$(echo "$DCR_RESP" | jq -r '.clientId // .client_id')"
 CS="$(echo "$DCR_RESP" | jq -r '.clientSecret // .client_secret')"
 [ -n "$CK" ] && [ -n "$CS" ] || { echo "!! DCR failed"; echo "$DCR_RESP" | jq .; exit 1; }
 
-echo "▶ Getting admin access token (password grant)"
-SCOPES="apim:api_view apim:api_create apim:api_publish apim:tier_view apim:app_manage apim:sub_manage apim:subscribe"
-TOKEN_RESP="$(curl -sk -u "${CK}:${CS}" -d "grant_type=password&username=${AM_ADMIN_USER}&password=${AM_ADMIN_PASS}&scope=${SCOPES}" \
-  "${AM_BASE}/oauth2/token")"
-TOKEN="$(echo "$TOKEN_RESP" | jq -r '.access_token // empty')"
-
-if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-  echo "!! Token generation failed. Response:"
-  echo "$TOKEN_RESP" | jq .
-  exit 1
-fi
-
-# Set up auth headers for API calls
-AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
-
 pub="${AM_BASE}/api/am/publisher/v4"
 dev="${AM_BASE}/api/am/devportal/v3"
 
 # Wait for Publisher API to be fully responsive (test both GET and POST operations)
+# Note: We use basic auth here instead of token to avoid token expiration during wait
 echo "▶ Waiting for Publisher API to be ready..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
   # First check: Can we GET APIs?
-  HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" "${pub}/apis?limit=1" 2>/dev/null)
+  HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -u "${AM_ADMIN_USER}:${AM_ADMIN_PASS}" "${pub}/apis?limit=1" 2>/dev/null)
   if [ "$HTTP_CODE" = "200" ]; then
     echo "  ✓ Publisher API GET is ready (HTTP 200)"
-    # Additional stabilization time for POST operations
-    echo "  ... waiting additional 10s for POST operations to stabilize..."
-    sleep 10
+    # Additional stabilization time for POST operations (revisions, deployments, publish)
+    POST_STABILIZE_WAIT="${POST_STABILIZE_WAIT:-50}"
+    if [[ "${POST_STABILIZE_WAIT}" =~ ^[0-9]+$ ]] && [ "${POST_STABILIZE_WAIT}" -gt 0 ]; then
+      echo "  ... waiting additional ${POST_STABILIZE_WAIT}s for POST operations to stabilize..."
+      sleep "${POST_STABILIZE_WAIT}"
+    else
+      echo "  ... skipping POST stabilization wait (POST_STABILIZE_WAIT=${POST_STABILIZE_WAIT})"
+    fi
     break
   fi
   echo "  ... waiting for Publisher API (attempt $((RETRY_COUNT+1))/$MAX_RETRIES, got HTTP $HTTP_CODE)"
@@ -79,6 +70,22 @@ if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
   echo "!! Publisher API did not become ready in time"
   exit 1
 fi
+
+# Now generate the access token AFTER stabilization wait to avoid token expiration
+echo "▶ Getting admin access token (password grant, 1 day validity)"
+SCOPES="apim:api_view apim:api_create apim:api_publish apim:tier_view apim:app_manage apim:sub_manage apim:subscribe"
+TOKEN_RESP="$(curl -sk -u "${CK}:${CS}" -d "grant_type=password&username=${AM_ADMIN_USER}&password=${AM_ADMIN_PASS}&scope=${SCOPES}&validity_period=86400" \
+  "${AM_BASE}/oauth2/token")"
+TOKEN="$(echo "$TOKEN_RESP" | jq -r '.access_token // empty')"
+
+if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
+  echo "!! Token generation failed. Response:"
+  echo "$TOKEN_RESP" | jq .
+  exit 1
+fi
+
+# Set up auth headers for API calls
+AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json")
 
 # Helper: call API and capture HTTP status + body
 call() {
@@ -201,18 +208,18 @@ deploy_and_publish() {
 }
 
 # ---------- Parse YAML and create APIs ----------
-APIS_LEN="$(yq eval '.rest_apis | length' "$CFG")"
+APIS_LEN="$(yq eval '.apis | length' "$CFG")"
 echo "▶ Creating ${APIS_LEN} APIs from ${CFG}"
 
 # Temporarily disable exit on error for API creation loop
 set +e
 for i in $(seq 0 $((APIS_LEN-1))); do
-  name="$(yq eval ".rest_apis[$i].name" "$CFG")"
-  ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
-  ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
-  be="$(yq eval ".rest_apis[$i].backend_url" "$CFG")"
-  desc="$(yq eval ".rest_apis[$i].description" "$CFG")"
-  tags_json="$(yq eval ".rest_apis[$i].tags" "$CFG" -o=json | jq -c '.')"
+  name="$(yq eval ".apis[$i].name" "$CFG")"
+  ctx="$(yq eval ".apis[$i].context" "$CFG")"
+  ver="$(yq eval ".apis[$i].version" "$CFG")"
+  be="$(yq eval ".apis[$i].backend_url" "$CFG")"
+  desc="$(yq eval ".apis[$i].description" "$CFG")"
+  tags_json="$(yq eval ".apis[$i].tags" "$CFG" -o=json | jq -c '.')"
   
   echo "  [${i}/$((APIS_LEN-1))] Processing: ${name}"
   
@@ -363,9 +370,9 @@ echo "# Or using password grant (requires user credentials):"
 echo "# TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=password&username=admin&password=admin' ${TOKEN_EP} | jq -r .access_token)"
 echo ""
 for i in $(seq 0 $((APIS_LEN-1))); do
-  name="$(yq eval ".rest_apis[$i].name" "$CFG")"
-  ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
-  ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
+  name="$(yq eval ".apis[$i].name" "$CFG")"
+  ctx="$(yq eval ".apis[$i].context" "$CFG")"
+  ver="$(yq eval ".apis[$i].version" "$CFG")"
   echo "# ${name}"
   echo "curl -sk -H \"Authorization: Bearer \$TOKEN\" https://${GW_HOST}:${GW_PORT}${ctx}/${ver}/health"
   echo ""

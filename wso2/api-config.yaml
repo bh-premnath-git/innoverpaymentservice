@@ -1,7 +1,7 @@
 # WSO2 API Manager Configuration
 # This file defines APIs to be created and published
 
-rest_apis:
+apis:
   - name: "Forex Service API"
     context: "/api/forex"
     version: "1.0.0"
