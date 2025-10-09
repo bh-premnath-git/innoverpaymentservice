@@ -67,6 +67,21 @@ AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
   echo "⚠️  Key Manager registration failed - continuing with Resident Key Manager"
 }
 
+# Wait for Key Manager configuration to be loaded and propagated
+echo "▶ Waiting for Key Manager configuration to stabilize..."
+sleep 30
+
+# Verify Key Manager is accessible
+echo "▶ Verifying Key Manager registration..."
+for i in {1..5}; do
+  if curl -sk -u admin:admin "https://localhost:9443/api/am/admin/v4/key-managers" | grep -q "WSO2-IS"; then
+    echo "  ✓ Key Manager verified"
+    break
+  fi
+  echo "  ... attempt $i/5"
+  sleep 5
+done
+
 # ============================================================================
 # Step 2: Publish APIs from YAML configuration
 # ============================================================================

@@ -123,13 +123,42 @@ deploy_and_publish() {
     jq . "$tmp" 2>/dev/null || cat "$tmp"
     rm -f "$tmp"; return 1
   fi
-  local rev_id
-  rev_id="$(jq -r '.id // .revisionId // .revisionUUID' "$tmp")"; rm -f "$tmp"
   
-  echo "  - deploying revision ${rev_id} to Default@${VHOST}"
-  local dep_payload
-  dep_payload="$(jq -nc --arg rid "$rev_id" --arg vhost "$VHOST" '[{revisionUuid:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
-  read -r code tmp < <(call POST "${pub}/apis/${api_id}/deploy-revision" "$dep_payload")
+  # Extract both revision UUID and numeric ID with proper handling
+  local rev_uuid rev_num dep_payload
+  rev_uuid="$(jq -r '.id // .revisionUUID // empty' "$tmp")"
+  rev_num="$(jq -r '.revisionId // empty' "$tmp")"
+  rm -f "$tmp"
+  
+  # Determine which identifier to use and build appropriate payload
+  if [ -n "$rev_uuid" ] && [ "$rev_uuid" != "null" ]; then
+    if [[ "$rev_uuid" =~ ^[0-9]+$ ]]; then
+      # Numeric ID - use revisionId field
+      dep_payload="$(jq -nc --argjson rid "$rev_uuid" --arg vhost "$VHOST" '[{revisionId:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
+      echo "  - deploying revision ${rev_uuid} (numeric) to Default@${VHOST}"
+    else
+      # UUID - use revisionUuid field
+      dep_payload="$(jq -nc --arg rid "$rev_uuid" --arg vhost "$VHOST" '[{revisionUuid:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
+      echo "  - deploying revision ${rev_uuid} to Default@${VHOST}"
+    fi
+  elif [ -n "$rev_num" ] && [ "$rev_num" != "null" ]; then
+    if [[ "$rev_num" =~ ^[0-9]+$ ]]; then
+      # Numeric ID from revisionId field
+      dep_payload="$(jq -nc --argjson rid "$rev_num" --arg vhost "$VHOST" '[{revisionId:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
+      echo "  - deploying revision ${rev_num} to Default@${VHOST}"
+    else
+      # UUID from revisionId field (unlikely but handle it)
+      dep_payload="$(jq -nc --arg rid "$rev_num" --arg vhost "$VHOST" '[{revisionUuid:$rid,name:"Default",vhost:$vhost,displayOnDevportal:true}]')"
+      echo "  - deploying revision ${rev_num} to Default@${VHOST}"
+    fi
+  else
+    echo "  !! Could not determine revision identifier from create response"
+    return 1
+  fi
+  
+  # Deploy with revisionId query parameter (use first available identifier)
+  local rev_id_param="${rev_uuid:-$rev_num}"
+  read -r code tmp < <(call POST "${pub}/apis/${api_id}/deploy-revision?revisionId=${rev_id_param}" "$dep_payload")
   if [ "$code" != "201" ] && [ "$code" != "200" ]; then
     echo "  !! Deploy failed (HTTP ${code})"
     jq . "$tmp" 2>/dev/null || cat "$tmp"

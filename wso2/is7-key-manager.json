@@ -69,6 +69,7 @@
     "Username": "admin",
     "Password": "admin",
     "self_validate_jwt": "true",
+    "service_url": "https://wso2is:9443/services/",
     "token_endpoint": "https://wso2is:9443/oauth2/token",
     "revoke_endpoint": "https://wso2is:9443/oauth2/revoke",
     "client_registration_endpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
