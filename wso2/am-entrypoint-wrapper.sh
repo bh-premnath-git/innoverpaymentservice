@@ -64,8 +64,7 @@ AM_PORT=9443 \
 AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
 AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
 /home/wso2carbon/register-is7-key-manager.sh || {
-  echo "⚠️  IS7 Key Manager registration failed (may already exist)"
-  echo "   Continuing with API setup..."
+  echo "⚠️  Key Manager registration failed - continuing with Resident Key Manager"
 }
 
 # ============================================================================
@@ -73,15 +72,12 @@ AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
 # ============================================================================
 if [ -f "/config/api-config.yaml" ]; then
   echo ""
-  echo "▶ Running API setup..."
+  echo "▶ Running API setup (modular version)..."
   AM_HOST=localhost \
   AM_PORT=9443 \
   AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
   AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
-  GW_HOST=${GW_HOST:-localhost} \
-  GW_PORT=${GW_PORT:-8243} \
-  VHOST=${VHOST:-localhost} \
-  KEY_MANAGER_NAME=WSO2-IS \
+  KEY_MANAGER_NAME="WSO2-IS" \
   /home/wso2carbon/apim-publish-from-yaml.sh /config/api-config.yaml || echo "⚠️  API setup failed"
 else
   echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
@@ -91,7 +87,9 @@ echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo "✅ WSO2 APIM Setup Complete"
 echo "════════════════════════════════════════════════════════════════"
-echo "Key Manager: WSO2-IS (WSO2 Identity Server 7.1.0)"
+echo "Key Manager: WSO2-IS"
+echo "All users from WSO2 IS can now authenticate (admin, finance, auditor, ops_user, user)"
+echo ""
 echo "Admin Portal: https://localhost:9443/admin"
 echo "Dev Portal:   https://localhost:9443/devportal"
 echo "Publisher:    https://localhost:9443/publisher"

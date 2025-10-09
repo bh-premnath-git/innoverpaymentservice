@@ -53,6 +53,7 @@ services:
     ports:
       - "9444:9443"  # HTTPS port for Identity Server (9444 external, 9443 internal)
     volumes:
+      - ./wso2is/deployment.toml:/home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml
       - wso2is-data:/home/wso2carbon/wso2is-7.1.0/repository
     extra_hosts: *extra_hosts
     healthcheck:
@@ -85,6 +86,7 @@ services:
       - "8243:8243"
       - "9443:9443"
     volumes:
+      - ./wso2/deployment.toml:/home/wso2carbon/wso2am-4.5.0/repository/conf/deployment.toml
       - wso2am-data:/home/wso2carbon/wso2am-4.5.0/repository
       - ./wso2/api-config.yaml:/config/api-config.yaml:ro
       - ./wso2/output:/config

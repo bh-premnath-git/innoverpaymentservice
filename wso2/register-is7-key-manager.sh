@@ -20,7 +20,7 @@ AM_ADMIN_USER="${AM_ADMIN_USER:-admin}"
 AM_ADMIN_PASS="${AM_ADMIN_PASS:-admin}"
 
 KM_NAME="WSO2-IS"
-KM_CONFIG_FILE="/config/is7-key-manager.json"
+KM_CONFIG_FILE="/home/wso2carbon/is7-key-manager.json"
 
 echo "════════════════════════════════════════════════════════════════"
 echo "Registering WSO2 IS 7 as Third-Party Key Manager"

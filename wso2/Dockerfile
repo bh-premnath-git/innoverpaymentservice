@@ -8,19 +8,20 @@ RUN apk add --no-cache bash curl jq yq
 # ============================================================================
 # IS7 Key Manager Registration
 # ============================================================================
-# Copy IS7 Key Manager configuration
-COPY is7-key-manager.json /config/is7-key-manager.json
+# Copy IS7 Key Manager configuration to home directory (not /config which gets mounted)
+COPY is7-key-manager.json /home/wso2carbon/is7-key-manager.json
 COPY register-is7-key-manager.sh /home/wso2carbon/register-is7-key-manager.sh
 RUN chmod +x /home/wso2carbon/register-is7-key-manager.sh && \
-    chown wso2carbon:wso2 /home/wso2carbon/register-is7-key-manager.sh
+    chown wso2carbon:wso2 /home/wso2carbon/register-is7-key-manager.sh /home/wso2carbon/is7-key-manager.json
 
 # ============================================================================
 # API Publishing Scripts
 # ============================================================================
-# Copy API setup script
+# Copy API setup scripts (both old and new versions)
 COPY apim-publish-from-yaml.sh /home/wso2carbon/apim-publish-from-yaml.sh
-RUN chmod +x /home/wso2carbon/apim-publish-from-yaml.sh && \
-    chown wso2carbon:wso2 /home/wso2carbon/apim-publish-from-yaml.sh
+COPY apim-setup-v2.sh /home/wso2carbon/apim-setup-v2.sh
+RUN chmod +x /home/wso2carbon/apim-publish-from-yaml.sh /home/wso2carbon/apim-setup-v2.sh && \
+    chown wso2carbon:wso2 /home/wso2carbon/apim-publish-from-yaml.sh /home/wso2carbon/apim-setup-v2.sh
 
 # Create wrapper script to run API-M then setup APIs
 COPY am-entrypoint-wrapper.sh /home/wso2carbon/am-entrypoint-wrapper.sh

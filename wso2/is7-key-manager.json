@@ -4,14 +4,13 @@
   "type": "WSO2-IS",
   "description": "WSO2 Identity Server 7.1.0 as Third-Party Key Manager for APIM 4.5.0",
   "enabled": true,
+  "tokenType": "DIRECT",
   "issuer": "https://wso2is:9443/oauth2/token",
   "availableGrantTypes": [
     "password",
     "client_credentials",
     "authorization_code",
-    "refresh_token",
-    "urn:ietf:params:oauth:grant-type:saml2-bearer",
-    "urn:ietf:params:oauth:grant-type:jwt-bearer"
+    "refresh_token"
   ],
   "enableTokenGeneration": true,
   "enableTokenEncryption": false,
@@ -19,39 +18,53 @@
   "enableOAuthAppCreation": true,
   "enableMapOAuthConsumerApps": false,
   "enableSelfValidationJWT": true,
-  "claimMapping": [
+  "claimMapping": [],
+  "consumerKeyClaim": "azp",
+  "scopesClaim": "scope",
+  "endpoints": [
     {
-      "remoteClaim": "sub",
-      "localClaim": "http://wso2.org/claims/username"
+      "name": "authorize",
+      "value": "https://wso2is:9443/oauth2/authorize"
     },
     {
-      "remoteClaim": "email",
-      "localClaim": "http://wso2.org/claims/emailaddress"
+      "name": "token",
+      "value": "https://wso2is:9443/oauth2/token"
     },
     {
-      "remoteClaim": "groups",
-      "localClaim": "http://wso2.org/claims/role"
+      "name": "revoke",
+      "value": "https://wso2is:9443/oauth2/revoke"
+    },
+    {
+      "name": "userinfo",
+      "value": "https://wso2is:9443/scim2/Me"
+    },
+    {
+      "name": "introspection",
+      "value": "https://wso2is:9443/oauth2/introspect"
+    },
+    {
+      "name": "jwks",
+      "value": "https://wso2is:9443/oauth2/jwks"
+    },
+    {
+      "name": "client_registration",
+      "value": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
+    },
+    {
+      "name": "well_known",
+      "value": "https://wso2is:9443/oauth2/token/.well-known/openid-configuration"
     }
   ],
-  "endpoints": {
-    "authorize": "https://wso2is:9443/oauth2/authorize",
-    "token": "https://wso2is:9443/oauth2/token",
-    "revoke": "https://wso2is:9443/oauth2/revoke",
-    "userinfo": "https://wso2is:9443/scim2/Me",
-    "introspection": "https://wso2is:9443/oauth2/introspect",
-    "jwks": "https://wso2is:9443/oauth2/jwks",
-    "client_registration": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register",
-    "well_known": "https://wso2is:9443/oauth2/token/.well-known/openid-configuration"
-  },
   "certificates": {
     "type": "JWKS",
     "value": "https://wso2is:9443/oauth2/jwks"
   },
-  "alias": [],
   "additionalProperties": {
     "Username": "admin",
     "Password": "admin",
     "self_validate_jwt": "true",
-    "claim_mappings": []
+    "token_endpoint": "https://wso2is:9443/oauth2/token",
+    "revoke_endpoint": "https://wso2is:9443/oauth2/revoke",
+    "client_registration_endpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
   }
 }
