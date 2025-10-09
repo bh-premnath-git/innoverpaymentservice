@@ -18,9 +18,15 @@
   "enableOAuthAppCreation": true,
   "enableMapOAuthConsumerApps": false,
   "enableSelfValidationJWT": true,
-  "claimMapping": [],
   "consumerKeyClaim": "azp",
   "scopesClaim": "scope",
+  "tokenEndpoint": "https://wso2is:9443/oauth2/token",
+  "revokeEndpoint": "https://wso2is:9443/oauth2/revoke",
+  "clientRegistrationEndpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register",
+  "introspectionEndpoint": "https://wso2is:9443/oauth2/introspect",
+  "userInfoEndpoint": "https://wso2is:9443/scim2/Me",
+  "authorizeEndpoint": "https://wso2is:9443/oauth2/authorize",
+  "wellKnownEndpoint": "https://wso2is:9443/oauth2/token/.well-known/openid-configuration",
   "endpoints": [
     {
       "name": "authorize",

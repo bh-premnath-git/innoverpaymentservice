@@ -16,10 +16,16 @@ RUN cp /home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml /home/wso2c
 COPY deployment.toml /home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml
 RUN chown wso2carbon:wso2 /home/wso2carbon/wso2is-7.1.0/repository/conf/deployment.toml
 
-# Download token revocation event handler JAR (required for APIM integration)
-RUN curl -L -o /home/wso2carbon/wso2is-7.1.0/repository/components/dropins/notification.event.handlers-2.0.5.jar \
-    https://maven.wso2.org/nexus/service/local/repositories/releases/content/org/wso2/is/notification.event.handlers/2.0.5/notification.event.handlers-2.0.5.jar && \
-    chown wso2carbon:wso2 /home/wso2carbon/wso2is-7.1.0/repository/components/dropins/notification.event.handlers-2.0.5.jar
+# Remove X509Certificate valve configuration from catalina-server.xml to avoid ClassNotFoundException
+RUN sed -i '/<Valve className="org.wso2.carbon.extension.identity.x509Certificate.valve.X509CertificateAuthenticationValve"/d' \
+    /home/wso2carbon/wso2is-7.1.0/repository/conf/tomcat/catalina-server.xml || true
+
+# =============================================================================
+# Key Manager Extensions (for APIM Integration)
+# =============================================================================
+# Note: For IS 7.1.0, the notification handlers are built-in (no dropins needed)
+# The deployment.toml event_listener configuration is sufficient
+# If you need additional Key Manager operations, add them here as needed
 
 # =============================================================================
 # User/Role Setup Scripts

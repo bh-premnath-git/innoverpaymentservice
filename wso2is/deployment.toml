@@ -1,68 +1,13 @@
-<<<<<<< HEAD
-# WSO2 Identity Server 7.1.0 - APIM Key Manager Integration Configuration
-# This file extends the default deployment.toml for WSO2 IS to enable integration
-# with WSO2 API Manager 4.5.0 as an external Key Manager
-
-# =============================================================================
-# Server Configuration
-# =============================================================================
-[server]
-hostname = "localhost"
-node_ip = "127.0.0.1"
-server_role = "default"
-=======
 [server]
 hostname = "wso2is"
 node_ip = "127.0.0.1"
 base_path = "https://$ref{server.hostname}:${carbon.management.port}"
->>>>>>> 44b876c (changes)
 
 [super_admin]
 username = "admin"
 password = "admin"
 create_admin_account = true
 
-<<<<<<< HEAD
-# =============================================================================
-# Database Configuration
-# =============================================================================
-[database.identity_db]
-driver = "org.h2.Driver"
-url = "jdbc:h2:./repository/database/WSO2IDENTITY_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
-username = "wso2carbon"
-password = "wso2carbon"
-validationQuery = "SELECT 1"
-
-[database.shared_db]
-driver = "org.h2.Driver"
-url = "jdbc:h2:./repository/database/WSO2SHARED_DB;DB_CLOSE_ON_EXIT=FALSE;LOCK_TIMEOUT=60000"
-username = "wso2carbon"
-password = "wso2carbon"
-validationQuery = "SELECT 1"
-
-# =============================================================================
-# OAuth Configuration
-# =============================================================================
-[oauth]
-authorize_all_scopes = true
-
-# =============================================================================
-# Resource Access Control
-# =============================================================================
-# Allow APIM to read /scim2/Me cross-tenant (used as UserInfo endpoint)
-[[resource.access_control]]
-context = "(.*)/scim2/Me"
-secure = true
-http_method = "GET"
-cross_tenant = true
-permissions = []
-scopes = []
-
-# =============================================================================
-# Token Revocation Event Listener
-# =============================================================================
-# Send token revocation events to APIM
-=======
 [user_store]
 type = "database_unique_id"
 
@@ -94,41 +39,6 @@ hash= "66cd9688a2ae068244ea01e70f0e230f5623b7fa4cdecb65070a09ec06452262"
 [identity.auth_framework.endpoint]
 app_password= "dashboard"
 
-# The KeyStore which is used for encrypting/decrypting internal data. By default the primary keystore is used as the internal keystore.
-
-#[keystore.internal]
-#file_name = "$ref{keystore.primary.file_name}"
-#type = "$ref{keystore.primary.type}"
-#password = "$ref{keystore.primary.password}"
-#alias = "$ref{keystore.primary.alias}"
-#key_password = "$ref{keystore.primary.key_password}"
-
-# The KeyStore which is used for tls communication. By default the primary keystore is used as the tls keystore.
-
-#[keystore.tls]
-#file_name = "$ref{keystore.primary.file_name}"
-#type = "$ref{keystore.primary.type}"
-#password = "$ref{keystore.primary.password}"
-#alias = "$ref{keystore.primary.alias}"
-#key_password = "$ref{keystore.primary.key_password}"
-
-#Google reCAPTCHA settings.
-
-#[recaptcha]
-#enabled = true
-#api_url = "https://www.google.com/recaptcha/api.js"
-#verify_url = "https://www.google.com/recaptcha/api/siteverify"
-#site_key = ""
-#secret_key = ""
-
-# SMTP email sender settings.
-#[output_adapter.email]
-#from_address= "abcd@gmail.com"
-#username= "abcd"
-#password= "xxxx"
-#hostname= "smtp.gmail.com"
-#port= 587
-
 # Disable mutual TLS client authentication to avoid "more than one authentication method" error
 [[event_listener]]
 id = "mutual_tls_authenticator"
@@ -138,7 +48,6 @@ order = "158"
 enable = false
 
 # Token revocation event handler - notifies APIM about token operations
->>>>>>> 44b876c (changes)
 [[event_listener]]
 id = "token_revocation"
 type = "org.wso2.carbon.identity.core.handler.AbstractIdentityHandler"
@@ -148,89 +57,4 @@ order = 1
 notification_endpoint = "https://wso2am:9443/internal/data/v1/notify"
 username = "${admin.username}"
 password = "${admin.password}"
-'header.X-WSO2-KEY-MANAGER' = "WSO2-IS"
-<<<<<<< HEAD
-
-# =============================================================================
-# Role Management
-# =============================================================================
-# Allow APIM to create roles in IS7 using system_primary_* names
-[role_mgt]
-allow_system_prefix_for_role = true
-
-# =============================================================================
-# User Store Configuration
-# =============================================================================
-[user_store]
-type = "database_unique_id"
-
-# =============================================================================
-# Keystore Configuration
-# =============================================================================
-[keystore.primary]
-file_name = "wso2carbon.jks"
-password = "wso2carbon"
-alias = "wso2carbon"
-key_password = "wso2carbon"
-
-[keystore.internal]
-file_name = "wso2carbon.jks"
-password = "wso2carbon"
-alias = "wso2carbon"
-key_password = "wso2carbon"
-
-# =============================================================================
-# Truststore Configuration
-# =============================================================================
-[truststore]
-file_name = "client-truststore.jks"
-password = "wso2carbon"
-alias = "symmetric"
-
-# =============================================================================
-# Identity Provider Configuration
-# =============================================================================
-[identity_provider.mgt]
-enable = true
-
-# =============================================================================
-# Service Provider Configuration
-# =============================================================================
-[service_provider.mgt]
-enable = true
-
-# =============================================================================
-# SCIM Configuration
-# =============================================================================
-[scim]
-enable = true
-
-[scim.user]
-enable = true
-
-[scim.group]
-enable = true
-
-# =============================================================================
-# SAML Configuration
-# =============================================================================
-[saml]
-enable = true
-
-# =============================================================================
-# Event Handlers
-# =============================================================================
-[event.default_listener.identity_mgt]
-priority = 50
-enable = true
-
-[event.default_listener.governance_identity_mgt]
-priority = 95
-enable = true
-
-[event.default_listener.governance_identity_store]
-priority = 97
-enable = true
-
-=======
->>>>>>> 44b876c (changes)
+'header.X-WSO2-KEY-MANAGER' = "WSO2 IS"
