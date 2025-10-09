@@ -5,6 +5,18 @@ USER root
 # Install dependencies for API setup script
 RUN apk add --no-cache bash curl jq yq
 
+# ============================================================================
+# IS7 Key Manager Registration
+# ============================================================================
+# Copy IS7 Key Manager configuration
+COPY is7-key-manager.json /config/is7-key-manager.json
+COPY register-is7-key-manager.sh /home/wso2carbon/register-is7-key-manager.sh
+RUN chmod +x /home/wso2carbon/register-is7-key-manager.sh && \
+    chown wso2carbon:wso2 /home/wso2carbon/register-is7-key-manager.sh
+
+# ============================================================================
+# API Publishing Scripts
+# ============================================================================
 # Copy API setup script
 COPY apim-publish-from-yaml.sh /home/wso2carbon/apim-publish-from-yaml.sh
 RUN chmod +x /home/wso2carbon/apim-publish-from-yaml.sh && \

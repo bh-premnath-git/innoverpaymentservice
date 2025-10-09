@@ -64,8 +64,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.50"
-          memory: 1.5G
+          cpus: "2.00"
+          memory: 2G
     restart: unless-stopped
     networks: [edge]
 

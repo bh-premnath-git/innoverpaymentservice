@@ -54,8 +54,25 @@ echo "  ✓ Publisher is ready"
 echo "✅ WSO2 API-M is fully ready"
 sleep 10  # Brief stabilization time
 
-# Run API setup if config file exists
+# ============================================================================
+# Step 1: Register WSO2 IS 7 as Third-Party Key Manager
+# ============================================================================
+echo ""
+echo "▶ Registering WSO2 IS 7 as Third-Party Key Manager..."
+AM_HOST=localhost \
+AM_PORT=9443 \
+AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
+AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
+/home/wso2carbon/register-is7-key-manager.sh || {
+  echo "⚠️  IS7 Key Manager registration failed (may already exist)"
+  echo "   Continuing with API setup..."
+}
+
+# ============================================================================
+# Step 2: Publish APIs from YAML configuration
+# ============================================================================
 if [ -f "/config/api-config.yaml" ]; then
+  echo ""
   echo "▶ Running API setup..."
   AM_HOST=localhost \
   AM_PORT=9443 \
@@ -64,16 +81,21 @@ if [ -f "/config/api-config.yaml" ]; then
   GW_HOST=${GW_HOST:-localhost} \
   GW_PORT=${GW_PORT:-8243} \
   VHOST=${VHOST:-localhost} \
+  KEY_MANAGER_NAME=WSO2-IS \
   /home/wso2carbon/apim-publish-from-yaml.sh /config/api-config.yaml || echo "⚠️  API setup failed"
 else
   echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
 fi
 
 echo ""
-echo "ℹ️  To integrate WSO2 IS as Key Manager:"
-echo "   Configure manually via Admin Portal: https://localhost:9443/admin"
-echo "   Settings > Key Managers > Add Key Manager"
-echo "   Use WSO2 IS endpoints (port 9443 from Docker network: https://wso2is:9443)"
+echo "════════════════════════════════════════════════════════════════"
+echo "✅ WSO2 APIM Setup Complete"
+echo "════════════════════════════════════════════════════════════════"
+echo "Key Manager: WSO2-IS (WSO2 Identity Server 7.1.0)"
+echo "Admin Portal: https://localhost:9443/admin"
+echo "Dev Portal:   https://localhost:9443/devportal"
+echo "Publisher:    https://localhost:9443/publisher"
+echo "════════════════════════════════════════════════════════════════"
 
 # Keep container running
 echo "✅ Setup complete, WSO2 API-M running"

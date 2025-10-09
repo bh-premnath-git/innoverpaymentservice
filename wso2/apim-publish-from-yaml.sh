@@ -229,12 +229,21 @@ for i in $(seq 0 $((SUBS_LEN-1))); do
 done
 
 # ---------- Generate keys ----------
+<<<<<<< HEAD
+=======
+# Use WSO2-IS as Key Manager (not Resident) for APIM 4.5.0 + IS 7.x
+KEY_MANAGER_NAME="${KEY_MANAGER_NAME:-WSO2-IS}"
+>>>>>>> 5cb1c70 (changes)
 echo "▶ Generating PRODUCTION keys for ${APP_NAME} (Key Manager: ${KEY_MANAGER_NAME})"
 GEN_RESP="$(curl -sk "${dev}/applications/${APP_ID}/generate-keys" "${AUTH_HDR[@]}" -d @- <<EOF
 {
   "keyType": "PRODUCTION",
   "keyManager": "${KEY_MANAGER_NAME}",
+<<<<<<< HEAD
   "grantTypesToBeSupported": ["client_credentials","password","refresh_token"],
+=======
+  "grantTypesToBeSupported": ["password","client_credentials","refresh_token"],
+>>>>>>> 5cb1c70 (changes)
   "callbackUrl": "https://localhost/cb",
   "scopes": []
 }
@@ -269,8 +278,12 @@ cat > /config/application-keys.json <<EOF
   "production": {
     "consumerKey": "${CK_APP}",
     "consumerSecret": "${CS_APP}",
+<<<<<<< HEAD
     "keyManager": "${KEY_MANAGER_NAME}",
     "tokenEndpoint": "${TOKEN_EP}"
+=======
+    "keyManager": "${KEY_MANAGER_NAME}"
+>>>>>>> 5cb1c70 (changes)
   }
 }
 EOF
@@ -301,6 +314,17 @@ for i in $(seq 0 $((APIS_LEN-1))); do
   ctx="$(yq eval ".rest_apis[$i].context" "$CFG")"
   ver="$(yq eval ".rest_apis[$i].version" "$CFG")"
   echo "# ${name}"
+<<<<<<< HEAD
+=======
+  # Use IS7 token endpoint for WSO2-IS Key Manager (not APIM's Resident endpoint)
+  if [ "${KEY_MANAGER_NAME}" = "WSO2-IS" ]; then
+    TOKEN_EP="https://wso2is:9443/oauth2/token"
+  else
+    TOKEN_EP="${AM_BASE}/oauth2/token"
+  fi
+  echo "# Get token from ${KEY_MANAGER_NAME} Key Manager"
+  echo "TOKEN=\$(curl -sk -u ${CK_APP}:${CS_APP} -d 'grant_type=password&username=admin&password=admin' ${TOKEN_EP} | jq -r .access_token)"
+>>>>>>> 5cb1c70 (changes)
   echo "curl -sk -H \"Authorization: Bearer \$TOKEN\" https://${GW_HOST}:${GW_PORT}${ctx}/${ver}/health"
   echo ""
 done
