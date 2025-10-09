@@ -100,7 +100,7 @@ KM_CONFIG=$(cat <<EOF
   "type": "WSO2-IS",
   "description": "WSO2 Identity Server 7.1.0 as external Key Manager",
   "enabled": true,
-  "tokenType": "JWT",
+  "tokenType": "DIRECT",
   "issuer": "${IS_BASE}/oauth2/token",
   "endpoints": [
     {

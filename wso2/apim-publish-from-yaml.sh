@@ -56,14 +56,18 @@ AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json
 pub="${AM_BASE}/api/am/publisher/v4"
 dev="${AM_BASE}/api/am/devportal/v3"
 
-# Wait for Publisher API to be fully responsive
+# Wait for Publisher API to be fully responsive (test both GET and POST operations)
 echo "▶ Waiting for Publisher API to be ready..."
 MAX_RETRIES=30
 RETRY_COUNT=0
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  # First check: Can we GET APIs?
   HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" "${pub}/apis?limit=1" 2>/dev/null)
   if [ "$HTTP_CODE" = "200" ]; then
-    echo "  ✓ Publisher API is ready (HTTP 200)"
+    echo "  ✓ Publisher API GET is ready (HTTP 200)"
+    # Additional stabilization time for POST operations
+    echo "  ... waiting additional 10s for POST operations to stabilize..."
+    sleep 10
     break
   fi
   echo "  ... waiting for Publisher API (attempt $((RETRY_COUNT+1))/$MAX_RETRIES, got HTTP $HTTP_CODE)"
