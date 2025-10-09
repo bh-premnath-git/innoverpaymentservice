@@ -43,10 +43,10 @@ def load_app_keys():
 
 
 def get_token(consumer_key: str, consumer_secret: str, username: str, password: str):
-    """Get OAuth2 token from WSO2 AM"""
+    """Get OAuth2 token from WSO2 IS (Key Manager)"""
     try:
         response = requests.post(
-            "https://localhost:9443/oauth2/token",
+            "https://localhost:9444/oauth2/token",
             data={"grant_type": "password", "username": username, "password": password},
             auth=(consumer_key, consumer_secret),
             verify=False,
@@ -81,10 +81,12 @@ def main():
     print(f"   Consumer Key: {consumer_key}")
     print(f"   Key Manager: {key_manager}")
     
-    if key_manager == "Resident Key Manager":
+    if key_manager == "WSO2-IS":
+        print("\n✅ NOTE: Using WSO2-IS Key Manager")
+        print("   All users from WSO2 IS can authenticate (admin, finance, auditor, ops_user, user)")
+    elif key_manager == "Resident Key Manager":
         print("\n⚠️  NOTE: Using Resident Key Manager (WSO2 AM built-in user store)")
         print("   Only 'admin' user will work. Other users exist in WSO2 IS only.")
-        print("   To enable all users: See wso2/enable-is-key-manager.md")
     
     overall_results = {"users_tested": 0, "users_passed": 0, "total_api_calls": 0, "api_success": 0}
     

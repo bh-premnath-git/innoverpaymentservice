@@ -1,0 +1,344 @@
+=================================================================
+WSO2 IS 7 KEY MANAGER - QUICK FORM VALUES
+=================================================================
+⚠️ IMPORTANT: Use wso2is:9443 (Docker internal) NOT localhost:9444
+=================================================================
+
+WHY wso2is:9443 and NOT localhost:9444?
+  - You're configuring from APIM Admin Portal (inside APIM container)
+  - APIM needs to reach IS via Docker network hostname: wso2is
+  - localhost:9444 is only for external access from your host machine
+  - Port 9443 is the internal container port (9444 is mapped externally)
+
+Official docs show localhost:9444 because they assume single-host setup.
+In Docker, use container hostnames!
+
+=================================================================
+
+GENERAL DETAILS:
+  Name: WSO2-IS
+  Display Name: WSO2 Identity Server 7
+  Description: WSO2 Identity Server 7.1.0 Third-Party Key Manager
+  Key Manager Type: WSO2 Identity Server 7 (dropdown)
+  API Invocation Method: [✓] Direct Token
+
+ENDPOINTS:
+  Well-known URL: https://wso2is:9443/oauth2/token/.well-known/openid-configuration
+  Click [Import] button
+  
+  ⚠️ CRITICAL FIXES AFTER IMPORT:
+  1. UserInfo Endpoint: https://wso2is:9443/scim2/Me
+     (Auto-import fills: /oauth2/userinfo - WRONG!)
+  
+  2. Scope Management: https://wso2is:9443/api/identity/oauth2/v1.0/scopes
+     (May need manual entry)
+  
+  All other endpoints (should auto-fill correctly):
+  Issuer: https://wso2is:9443/oauth2/token
+  Token Endpoint: https://wso2is:9443/oauth2/token
+  Display Token Endpoint: https://wso2is:9443/oauth2/token
+  Revoke Endpoint: https://wso2is:9443/oauth2/revoke
+  Display Revoke Endpoint: https://wso2is:9443/oauth2/revoke
+  Authorize Endpoint: https://wso2is:9443/oauth2/authorize
+  Client Registration: https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register
+  Introspection: https://wso2is:9443/oauth2/introspect
+
+CLAIM URIs:
+  Consumer Key Claim URI: azp
+  Scopes Claim URI: scope
+
+GRANT TYPES (press Enter after each):
+  password
+  client_credentials
+  authorization_code
+  refresh_token
+  urn:ietf:params:oauth:grant-type:saml2-bearer
+  urn:ietf:params:oauth:grant-type:jwt-bearer
+  urn:ietf:params:oauth:grant-type:device_code
+  urn:ietf:params:oauth:grant-type:token-exchange
+  iwa:ntlm
+
+CERTIFICATES:
+  Type: [ ] PEM  [•] JWKS
+  JWKS URL: https://wso2is:9443/oauth2/jwks
+
+ADVANCED CONFIGURATIONS:
+  [✓] Token Generation
+  [✓] Out Of Band Provisioning  
+  [✓] Oauth App Creation
+  Token Validation: [•] Self validate JWT
+  Token Handling: (default)
+
+CLAIM MAPPINGS:
+  Remote: sub → Local: http://wso2.org/claims/username
+  Remote: email → Local: http://wso2.org/claims/emailaddress
+
+CONNECTOR CONFIGURATIONS:
+  Username: admin
+  Password: admin
+  WSO2 IS 7 API Resource Management Endpoint: 
+    https://wso2is:9443/api/server/v1/api-resources
+  WSO2 IS 7 Roles Endpoint: 
+    https://wso2is:9443/scim2/v2/Roles
+  Create roles in WSO2 IS 7: [✓] (Enable if you want APIM to create roles in IS)
+
+Click [Add] button to save!
+
+=================================================================
+AFTER SAVING:
+=================================================================
+
+1. Verify in Admin Portal:
+   Settings → Key Managers → Should see "WSO2-IS" (Enabled)
+
+2. Regenerate application keys:
+   docker compose restart wso2am
+   
+3. Test with IS users:
+   ./test_auth_flow.py
+   
+   OR manually:
+   
+   TOKEN=$(curl -sk -u CLIENT_ID:CLIENT_SECRET \
+     -d "grant_type=password&username=finance&password=Finance123" \
+     https://localhost:9444/oauth2/token | jq -r '.access_token')
+   
+   curl -H "Authorization: Bearer $TOKEN" \
+     http://localhost:8280/api/forex/1.0.0/health
+
+=================================================================
+# ✅ WSO2 IS 7 Key Manager Setup Checklist
+
+## Before You Start
+- [ ] WSO2 IS is running and healthy
+- [ ] WSO2 AM is running and healthy
+- [ ] Open Admin Portal: https://localhost:9443/admin
+- [ ] Login: admin/admin
+- [ ] Navigate to: Settings → Key Managers → Add Key Manager
+
+---
+
+## Step 1: General Details
+- [ ] **Name**: `WSO2-IS`
+- [ ] **Display Name**: `WSO2 Identity Server 7`
+- [ ] **Description**: `WSO2 Identity Server 7.1.0 Third-Party Key Manager`
+- [ ] **Key Manager Type**: Select `WSO2 Identity Server 7` from dropdown
+- [ ] **API Invocation Method**: Check ☑ `Direct Token`
+
+---
+
+## Step 2: Key Manager Endpoints
+
+### Import from Well-known
+- [ ] **Well-known URL**: `https://wso2is:9443/oauth2/token/.well-known/openid-configuration`
+- [ ] Click **[Import]** button
+- [ ] Wait for auto-fill
+
+### ⚠️ CRITICAL: Manual Fixes After Import
+
+#### Fix #1: UserInfo Endpoint
+- [ ] Find **UserInfo Endpoint** field
+- [ ] Change from: `https://wso2is:9443/oauth2/userinfo` ❌
+- [ ] Change to: `https://wso2is:9443/scim2/Me` ✅
+
+#### Fix #2: Scope Management Endpoint
+- [ ] Find **Scope Management Endpoint** field
+- [ ] Enter: `https://wso2is:9443/api/identity/oauth2/v1.0/scopes`
+
+### Verify Other Endpoints (should be auto-filled)
+- [ ] **Issuer**: `https://wso2is:9443/oauth2/token`
+- [ ] **Token Endpoint**: `https://wso2is:9443/oauth2/token`
+- [ ] **Display Token Endpoint**: `https://wso2is:9443/oauth2/token`
+- [ ] **Revoke Endpoint**: `https://wso2is:9443/oauth2/revoke`
+- [ ] **Display Revoke Endpoint**: `https://wso2is:9443/oauth2/revoke`
+- [ ] **Authorize Endpoint**: `https://wso2is:9443/oauth2/authorize`
+- [ ] **Client Registration Endpoint**: `https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register`
+- [ ] **Introspection Endpoint**: `https://wso2is:9443/oauth2/introspect`
+
+---
+
+## Step 3: Claim URIs
+- [ ] **Consumer Key Claim URI**: `azp`
+- [ ] **Scopes Claim URI**: `scope`
+
+---
+
+## Step 4: Grant Types
+Add these (press Enter after each):
+- [ ] `password`
+- [ ] `client_credentials`
+- [ ] `authorization_code`
+- [ ] `refresh_token`
+- [ ] `urn:ietf:params:oauth:grant-type:saml2-bearer`
+- [ ] `urn:ietf:params:oauth:grant-type:jwt-bearer`
+- [ ] `urn:ietf:params:oauth:grant-type:device_code`
+- [ ] `urn:ietf:params:oauth:grant-type:token-exchange`
+- [ ] `iwa:ntlm`
+
+---
+
+## Step 5: Certificates
+- [ ] **Type**: Select `JWKS` (not PEM)
+- [ ] **JWKS URL**: `https://wso2is:9443/oauth2/jwks`
+
+---
+
+## Step 6: Advanced Configurations
+- [ ] Check ☑ **Token Generation**
+- [ ] Check ☑ **Out Of Band Provisioning**
+- [ ] Check ☑ **Oauth App Creation**
+- [ ] **Token Validation Method**: Select `Self validate JWT`
+- [ ] **Token Handling Options**: Leave as default
+
+---
+
+## Step 7: Claim Mappings
+Click "Expand to add edit claim mappings" and add:
+- [ ] Remote: `sub` → Local: `http://wso2.org/claims/username`
+- [ ] Remote: `email` → Local: `http://wso2.org/claims/emailaddress`
+
+---
+
+## Step 8: Connector Configurations
+- [ ] **Username**: `admin`
+- [ ] **Password**: `admin`
+- [ ] **WSO2 IS 7 API Resource Management Endpoint**: 
+      `https://wso2is:9443/api/server/v1/api-resources`
+- [ ] **WSO2 IS 7 Roles Endpoint**: 
+      `https://wso2is:9443/scim2/v2/Roles`
+- [ ] Check ☑ **Create roles in WSO2 Identity Server 7** (optional but recommended)
+
+---
+
+## Step 9: Save
+- [ ] Click **[Add]** button at the bottom
+- [ ] Wait for success message
+- [ ] Verify "WSO2-IS" appears in Key Managers list with status "Enabled"
+
+---
+
+## Step 10: Verify Registration
+
+### Via Admin Portal
+- [ ] Go to Settings → Key Managers
+- [ ] Should see "WSO2-IS" with green "Enabled" status
+- [ ] Click on it to verify all endpoints are correct
+
+### Via API
+```bash
+curl -sk -u admin:admin \
+  https://localhost:9443/api/am/admin/v4/key-managers | \
+  jq '.list[] | select(.name=="WSO2-IS")'
+```
+- [ ] Should return Key Manager details
+
+---
+
+## Step 11: Regenerate Application Keys
+
+The existing application keys were generated with "Resident Key Manager". You need to regenerate them with "WSO2-IS" Key Manager.
+
+### Option A: Via Developer Portal
+- [ ] Open https://localhost:9443/devportal
+- [ ] Login: admin/admin
+- [ ] Go to Applications → DefaultApplication
+- [ ] Production Keys → Regenerate
+- [ ] Select Key Manager: WSO2-IS
+- [ ] Click Generate Keys
+
+### Option B: Delete and Recreate (Automated)
+```bash
+# Restart APIM to trigger re-setup with new Key Manager
+docker compose restart wso2am
+
+# Wait for startup (3-5 minutes)
+docker logs -f innover-wso2am-1
+
+# Check new keys
+cat wso2/output/application-keys.json
+# Should show "keyManager": "WSO2-IS"
+```
+- [ ] Keys regenerated with WSO2-IS Key Manager
+
+---
+
+## Step 12: Test with IS Users
+
+### Test with finance user
+```bash
+# Get application keys
+APP_KEYS=$(cat wso2/output/application-keys.json)
+CLIENT_ID=$(echo $APP_KEYS | jq -r '.production.consumerKey')
+CLIENT_SECRET=$(echo $APP_KEYS | jq -r '.production.consumerSecret')
+
+# Get token from IS for finance user
+TOKEN=$(curl -sk -u "$CLIENT_ID:$CLIENT_SECRET" \
+  -d "grant_type=password&username=finance&password=Finance123" \
+  https://localhost:9444/oauth2/token | jq -r '.access_token')
+
+# Call API via Gateway
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8280/api/forex/1.0.0/health
+```
+- [ ] Expected: `{"status":"ok","service":"svc-forex"}` ✅
+- [ ] NOT: `{"code":900901,"message":"Invalid Credentials"}` ❌
+
+### Test all users
+```bash
+python3 test_auth_flow.py
+```
+- [ ] All 5 users should pass (admin, finance, auditor, ops_user, user)
+
+---
+
+## Troubleshooting
+
+### Issue: "Bad Request" when saving
+**Cause**: Wrong endpoint URLs (using localhost instead of wso2is)
+**Fix**: Double-check all endpoints use `wso2is:9443` not `localhost:9444`
+
+### Issue: "Invalid Access Token" after setup
+**Cause**: Using old keys generated with Resident Key Manager
+**Fix**: Regenerate application keys with WSO2-IS Key Manager (Step 11)
+
+### Issue: finance user still fails
+**Cause**: Application keys not regenerated
+**Fix**: 
+```bash
+docker compose restart wso2am
+# Wait for restart, keys will be regenerated automatically
+```
+
+### Issue: Can't reach well-known URL
+**Cause**: WSO2 IS not running or not healthy
+**Fix**: 
+```bash
+docker compose ps wso2is
+docker logs innover-wso2is-1
+```
+
+---
+
+## Success Criteria
+
+✅ **All checkboxes above are checked**
+✅ **WSO2-IS Key Manager shows as "Enabled" in Admin Portal**
+✅ **Application keys show `"keyManager": "WSO2-IS"`**
+✅ **finance user can get token from IS**
+✅ **finance user can call APIs via Gateway**
+✅ **All 5 users pass test_auth_flow.py**
+
+---
+
+## Estimated Time
+- Form filling: **5 minutes**
+- Key regeneration: **3 minutes**
+- Testing: **2 minutes**
+- **Total: ~10 minutes** 🚀
+
+---
+
+## Need Help?
+- See `QUICK-FORM-VALUES.txt` for copy-paste values
+- See `DOCKER-VS-LOCALHOST.md` for hostname explanation
+- See `MANUAL-KEY-MANAGER-SETUP.md` for detailed guide
