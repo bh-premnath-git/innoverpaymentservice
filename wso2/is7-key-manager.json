@@ -1,17 +1,21 @@
 {
-  "name": "WSO2-IS7",
+  "name": "WSO2-IS",
   "displayName": "WSO2 Identity Server 7",
-  "type": "IS7",
+  "type": "WSO2-IS",
   "description": "WSO2 Identity Server 7.1.0 as Third-Party Key Manager for APIM 4.5.0",
   "enabled": true,
-  "tokenType": "DIRECT",
+  "tokenType": "JWT",
   "issuer": "https://wso2is:9443/oauth2/token",
-  "keyManagerServiceUrl": "https://wso2is:9443/services/",
   "availableGrantTypes": [
     "password",
     "client_credentials",
     "authorization_code",
-    "refresh_token"
+    "refresh_token",
+    "urn:ietf:params:oauth:grant-type:saml2-bearer",
+    "iwa:ntlm",
+    "urn:ietf:params:oauth:grant-type:device_code",
+    "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    "urn:ietf:params:oauth:grant-type:token-exchange"
   ],
   "enableTokenGeneration": true,
   "enableTokenEncryption": false,
@@ -22,43 +26,68 @@
   "consumerKeyClaim": "azp",
   "scopesClaim": "scope",
   "tokenEndpoint": "https://wso2is:9443/oauth2/token",
+  "displayTokenEndpoint": "https://wso2is:9443/oauth2/token",
   "revokeEndpoint": "https://wso2is:9443/oauth2/revoke",
+  "displayRevokeEndpoint": "https://wso2is:9443/oauth2/revoke",
   "clientRegistrationEndpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register",
   "introspectionEndpoint": "https://wso2is:9443/oauth2/introspect",
   "userInfoEndpoint": "https://wso2is:9443/scim2/Me",
   "authorizeEndpoint": "https://wso2is:9443/oauth2/authorize",
+  "scopeManagementEndpoint": "https://wso2is:9443/api/identity/oauth2/v1.0/scopes",
   "wellKnownEndpoint": "https://wso2is:9443/oauth2/token/.well-known/openid-configuration",
+  "claimMapping": [
+    {
+      "remoteClaim": "sub",
+      "localClaim": "http://wso2.org/claims/enduser"
+    },
+    {
+      "remoteClaim": "groups",
+      "localClaim": "http://wso2.org/claims/role"
+    }
+  ],
   "endpoints": [
     {
-      "name": "authorize",
-      "value": "https://wso2is:9443/oauth2/authorize"
-    },
-    {
-      "name": "token",
-      "value": "https://wso2is:9443/oauth2/token"
-    },
-    {
-      "name": "revoke",
-      "value": "https://wso2is:9443/oauth2/revoke"
-    },
-    {
-      "name": "userinfo",
-      "value": "https://wso2is:9443/scim2/Me"
-    },
-    {
-      "name": "introspection",
-      "value": "https://wso2is:9443/oauth2/introspect"
-    },
-    {
-      "name": "jwks",
-      "value": "https://wso2is:9443/oauth2/jwks"
-    },
-    {
-      "name": "client_registration",
+      "name": "client_registration_endpoint",
       "value": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
     },
     {
-      "name": "well_known",
+      "name": "introspection_endpoint",
+      "value": "https://wso2is:9443/oauth2/introspect"
+    },
+    {
+      "name": "token_endpoint",
+      "value": "https://wso2is:9443/oauth2/token"
+    },
+    {
+      "name": "display_token_endpoint",
+      "value": "https://wso2is:9443/oauth2/token"
+    },
+    {
+      "name": "revoke_endpoint",
+      "value": "https://wso2is:9443/oauth2/revoke"
+    },
+    {
+      "name": "display_revoke_endpoint",
+      "value": "https://wso2is:9443/oauth2/revoke"
+    },
+    {
+      "name": "userinfo_endpoint",
+      "value": "https://wso2is:9443/scim2/Me"
+    },
+    {
+      "name": "authorize_endpoint",
+      "value": "https://wso2is:9443/oauth2/authorize"
+    },
+    {
+      "name": "scope_management_endpoint",
+      "value": "https://wso2is:9443/api/identity/oauth2/v1.0/scopes"
+    },
+    {
+      "name": "jwks_endpoint",
+      "value": "https://wso2is:9443/oauth2/jwks"
+    },
+    {
+      "name": "well_known_endpoint",
       "value": "https://wso2is:9443/oauth2/token/.well-known/openid-configuration"
     }
   ],
@@ -69,10 +98,8 @@
   "additionalProperties": {
     "Username": "admin",
     "Password": "admin",
-    "self_validate_jwt": "true",
-    "keyManagerServiceUrl": "https://wso2is:9443/services/",
-    "token_endpoint": "https://wso2is:9443/oauth2/token",
-    "revoke_endpoint": "https://wso2is:9443/oauth2/revoke",
-    "client_registration_endpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
+    "api_resource_mgt_endpoint": "https://wso2is:9443/api/server/v1/api-resources",
+    "roles_endpoint": "https://wso2is:9443/scim2/v2/Roles",
+    "self_validate_jwt": "true"
   }
 }

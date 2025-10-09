@@ -88,6 +88,11 @@ fi
 echo "▶ Registering Key Manager '${KM_NAME}'"
 
 # Build the Key Manager configuration JSON
+# Reference material:
+# - Official WSO2 API-M guidance for configuring IS 7.x as a key manager
+#   https://raw.githubusercontent.com/wso2/docs-apim/master/en/docs/administer/key-managers/configure-wso2is7-connector.md
+# - Walkthrough of the full APIM ↔︎ IS 7.x integration flow
+#   (https://www.vincenzoracca.com/en/blog/container/other/wso2amwso2is/) – CLI tools may receive 403 responses, so a browser might be required
 KM_CONFIG=$(cat <<EOF
 {
   "name": "${KM_NAME}",
@@ -95,6 +100,7 @@ KM_CONFIG=$(cat <<EOF
   "type": "WSO2-IS",
   "description": "WSO2 Identity Server 7.1.0 as external Key Manager",
   "enabled": true,
+  "tokenType": "JWT",
   "issuer": "${IS_BASE}/oauth2/token",
   "endpoints": [
     {
@@ -136,35 +142,58 @@ KM_CONFIG=$(cat <<EOF
     {
       "name": "jwks_endpoint",
       "value": "${IS_BASE}/oauth2/jwks"
+    },
+    {
+      "name": "well_known_endpoint",
+      "value": "${IS_BASE}/oauth2/token/.well-known/openid-configuration"
     }
   ],
   "availableGrantTypes": [
-    "client_credentials",
     "password",
-    "refresh_token",
+    "client_credentials",
     "authorization_code",
+    "refresh_token",
     "urn:ietf:params:oauth:grant-type:saml2-bearer",
-    "urn:ietf:params:oauth:grant-type:jwt-bearer"
+    "iwa:ntlm",
+    "urn:ietf:params:oauth:grant-type:device_code",
+    "urn:ietf:params:oauth:grant-type:jwt-bearer",
+    "urn:ietf:params:oauth:grant-type:token-exchange"
   ],
+  "tokenEndpoint": "${IS_BASE}/oauth2/token",
+  "displayTokenEndpoint": "${IS_BASE}/oauth2/token",
+  "revokeEndpoint": "${IS_BASE}/oauth2/revoke",
+  "displayRevokeEndpoint": "${IS_BASE}/oauth2/revoke",
+  "clientRegistrationEndpoint": "${IS_BASE}/api/identity/oauth2/dcr/v1.1/register",
+  "introspectionEndpoint": "${IS_BASE}/oauth2/introspect",
+  "userInfoEndpoint": "${IS_BASE}/scim2/Me",
+  "authorizeEndpoint": "${IS_BASE}/oauth2/authorize",
+  "scopeManagementEndpoint": "${IS_BASE}/api/identity/oauth2/v1.0/scopes",
+  "wellKnownEndpoint": "${IS_BASE}/oauth2/token/.well-known/openid-configuration",
+  "claimMapping": [
+    {
+      "remoteClaim": "sub",
+      "localClaim": "http://wso2.org/claims/enduser"
+    },
+    {
+      "remoteClaim": "groups",
+      "localClaim": "http://wso2.org/claims/role"
+    }
+  ],
+  "consumerKeyClaim": "azp",
+  "scopesClaim": "scope",
+  "enableTokenGeneration": true,
+  "enableTokenEncryption": false,
+  "enableTokenHashing": false,
+  "enableOAuthAppCreation": true,
+  "enableMapOAuthConsumerApps": false,
+  "enableSelfValidationJWT": true,
   "additionalProperties": {
     "Username": "${IS_ADMIN_USER}",
     "Password": "${IS_ADMIN_PASS}",
-    "keyManagerServiceUrl": "${IS_BASE}/services/",
     "api_resource_mgt_endpoint": "${IS_BASE}/api/server/v1/api-resources",
     "roles_endpoint": "${IS_BASE}/scim2/v2/Roles",
-    "self_validate_jwt": "true",
-    "claim_mappings": [
-      {
-        "remoteClaim": "sub",
-        "localClaim": "http://wso2.org/claims/enduser"
-      },
-      {
-        "remoteClaim": "groups",
-        "localClaim": "http://wso2.org/claims/role"
-      }
-    ]
-  },
-  "tokenType": "JWT"
+    "self_validate_jwt": "true"
+  }
 }
 EOF
 )
