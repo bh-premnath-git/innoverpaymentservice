@@ -149,6 +149,7 @@ KM_CONFIG=$(cat <<EOF
   "additionalProperties": {
     "Username": "${IS_ADMIN_USER}",
     "Password": "${IS_ADMIN_PASS}",
+    "keyManagerServiceUrl": "${IS_BASE}/services/",
     "api_resource_mgt_endpoint": "${IS_BASE}/api/server/v1/api-resources",
     "roles_endpoint": "${IS_BASE}/scim2/v2/Roles",
     "self_validate_jwt": "true",

@@ -56,6 +56,26 @@ AUTH_HDR=(-H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json
 pub="${AM_BASE}/api/am/publisher/v4"
 dev="${AM_BASE}/api/am/devportal/v3"
 
+# Wait for Publisher API to be fully responsive
+echo "▶ Waiting for Publisher API to be ready..."
+MAX_RETRIES=30
+RETRY_COUNT=0
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  HTTP_CODE=$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" "${pub}/apis?limit=1" 2>/dev/null)
+  if [ "$HTTP_CODE" = "200" ]; then
+    echo "  ✓ Publisher API is ready (HTTP 200)"
+    break
+  fi
+  echo "  ... waiting for Publisher API (attempt $((RETRY_COUNT+1))/$MAX_RETRIES, got HTTP $HTTP_CODE)"
+  sleep 5
+  RETRY_COUNT=$((RETRY_COUNT+1))
+done
+
+if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+  echo "!! Publisher API did not become ready in time"
+  exit 1
+fi
+
 # Helper: call API and capture HTTP status + body
 call() {
   local method="$1" url="$2" body="${3:-}"
@@ -217,10 +237,19 @@ echo "✅ API creation phase complete"
 APP_NAME="$(yq eval '.application.name' "$CFG")"
 APP_TIER="$(yq eval '.application.throttling_policy' "$CFG")"
 echo "▶ Ensuring application '${APP_NAME}'"
+
+# First try: search by name
 APP_QRY="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}" --get --data-urlencode "query=name:${APP_NAME}")"
 APP_ID="$(echo "$APP_QRY" | jq -r '.list[0].applicationId // empty')"
 
-if [ -z "${APP_ID}" ]; then
+# If not found by query, try listing all and filtering
+if [ -z "${APP_ID}" ] || [ "${APP_ID}" = "null" ]; then
+  echo "  - searching for application in all apps..."
+  ALL_APPS="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}")"
+  APP_ID="$(echo "$ALL_APPS" | jq -r --arg name "$APP_NAME" '.list[] | select(.name == $name) | .applicationId // empty')"
+fi
+
+if [ -z "${APP_ID}" ] || [ "${APP_ID}" = "null" ]; then
   APP_PAYLOAD='{"name":"'"${APP_NAME}"'","throttlingPolicy":"'"${APP_TIER}"'","description":"autocreated","tokenType":"JWT","groups":[],"attributes":{}}'
   # Try create, tolerate 409 (already exists)
   TMP="$(mktemp)"
@@ -231,8 +260,12 @@ if [ -z "${APP_ID}" ]; then
   elif [ "$CODE" = "409" ]; then
     # Already exists (e.g., DefaultApplication) → read again
     echo "  - application already exists, fetching ID"
-    APP_QRY="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}" --get --data-urlencode "query=name:${APP_NAME}")"
-    APP_ID="$(echo "$APP_QRY" | jq -r '.list[0].applicationId // empty')"
+    ALL_APPS="$(curl -sk "${dev}/applications" "${AUTH_HDR[@]}")"
+    APP_ID="$(echo "$ALL_APPS" | jq -r --arg name "$APP_NAME" '.list[] | select(.name == $name) | .applicationId // empty')"
+    if [ -z "${APP_ID}" ] || [ "${APP_ID}" = "null" ]; then
+      echo "!! Could not find application ${APP_NAME} after 409 conflict"
+      exit 1
+    fi
   else
     echo "!! applications POST failed (HTTP ${CODE})"
     jq . "$TMP" 2>/dev/null || cat "$TMP"

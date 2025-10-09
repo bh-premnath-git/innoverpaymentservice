@@ -74,7 +74,7 @@ sleep 30
 # Verify Key Manager is accessible
 echo "▶ Verifying Key Manager registration..."
 for i in {1..5}; do
-  if curl -sk -u admin:admin "https://localhost:9443/api/am/admin/v4/key-managers" | grep -q "WSO2-IS"; then
+  if curl -sk -u admin:admin "https://localhost:9443/api/am/admin/v4/key-managers" | grep -q "WSO2-IS7"; then
     echo "  ✓ Key Manager verified"
     break
   fi
@@ -92,7 +92,7 @@ if [ -f "/config/api-config.yaml" ]; then
   AM_PORT=9443 \
   AM_ADMIN_USER=${AM_ADMIN_USER:-admin} \
   AM_ADMIN_PASS=${AM_ADMIN_PASS:-admin} \
-  KEY_MANAGER_NAME="WSO2-IS" \
+  KEY_MANAGER_NAME="WSO2-IS7" \
   /home/wso2carbon/apim-publish-from-yaml.sh /config/api-config.yaml || echo "⚠️  API setup failed"
 else
   echo "⚠️  No API config found at /config/api-config.yaml, skipping setup"
@@ -102,7 +102,7 @@ echo ""
 echo "════════════════════════════════════════════════════════════════"
 echo "✅ WSO2 APIM Setup Complete"
 echo "════════════════════════════════════════════════════════════════"
-echo "Key Manager: WSO2-IS"
+echo "Key Manager: WSO2-IS7"
 echo "All users from WSO2 IS can now authenticate (admin, finance, auditor, ops_user, user)"
 echo ""
 echo "Admin Portal: https://localhost:9443/admin"

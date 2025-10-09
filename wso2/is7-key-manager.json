@@ -1,11 +1,12 @@
 {
-  "name": "WSO2-IS",
+  "name": "WSO2-IS7",
   "displayName": "WSO2 Identity Server 7",
-  "type": "WSO2-IS",
+  "type": "IS7",
   "description": "WSO2 Identity Server 7.1.0 as Third-Party Key Manager for APIM 4.5.0",
   "enabled": true,
   "tokenType": "DIRECT",
   "issuer": "https://wso2is:9443/oauth2/token",
+  "keyManagerServiceUrl": "https://wso2is:9443/services/",
   "availableGrantTypes": [
     "password",
     "client_credentials",
@@ -69,7 +70,7 @@
     "Username": "admin",
     "Password": "admin",
     "self_validate_jwt": "true",
-    "service_url": "https://wso2is:9443/services/",
+    "keyManagerServiceUrl": "https://wso2is:9443/services/",
     "token_endpoint": "https://wso2is:9443/oauth2/token",
     "revoke_endpoint": "https://wso2is:9443/oauth2/revoke",
     "client_registration_endpoint": "https://wso2is:9443/api/identity/oauth2/dcr/v1.1/register"
