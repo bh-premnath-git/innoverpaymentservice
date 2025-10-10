@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Replace hostname in deployment.toml with environment variable
+echo "▶ Configuring hostname: ${WSO2_HOSTNAME:-localhost}"
+sed -i "s/^hostname = .*/hostname = \"${WSO2_HOSTNAME:-localhost}\"/" \
+  /home/wso2carbon/wso2am-4.5.0/repository/conf/deployment.toml
+
+
 # Start WSO2 IS in background
 echo "▶ Starting WSO2 Identity Server..."
 /home/wso2carbon/wso2is-7.1.0/bin/wso2server.sh &

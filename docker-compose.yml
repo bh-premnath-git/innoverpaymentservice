@@ -75,6 +75,7 @@ services:
       context: ./wso2
     environment:
       <<: *svc_env
+      WSO2_HOSTNAME: ${WSO2_HOSTNAME:-localhost}
       OIDC_ISSUER: ${OIDC_ISSUER:-https://localhost:9444/oauth2/token}
       AM_ADMIN_USER: ${WSO2_ADMIN_USERNAME:-admin}
       AM_ADMIN_PASS: ${WSO2_ADMIN_PASSWORD:-admin}
