@@ -23,7 +23,7 @@ for username in admin finance auditor ops_user user; do
   echo "Getting token for: ${username}..."
   
   TOKEN_RESPONSE=$(docker exec innover-wso2is-1 curl -sk -u "${IS_CLIENT_ID}:${IS_CLIENT_SECRET}" \
-    -d "grant_type=password&username=${username}&password=${password}" \
+    -d "grant_type=password&username=${username}&password=${password}&scope=openid email profile groups roles" \
     "https://localhost:9443/oauth2/token" 2>/dev/null)
   
   ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')

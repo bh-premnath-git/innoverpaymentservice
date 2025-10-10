@@ -159,7 +159,7 @@ if [ "${MINT_TOKENS}" = "true" ]; then
       u="${USER_OF_ROLE[$role]}"
       p="${PASS_OF_USER[$u]}"
       TOK_RESP="$(curl -sk -u "${CLIENT_ID}:${CLIENT_SECRET}" \
-        -d "grant_type=password&username=${u}&password=${p}&scope=openid" \
+        -d "grant_type=password&username=${u}&password=${p}&scope=openid email profile groups roles" \
         "${IS_BASE}/oauth2/token" 2>/dev/null)"
       TOK="$(echo "${TOK_RESP}" | jq -r '.access_token' 2>/dev/null || echo "")"
       if [ -n "${TOK}" ] && [ "${TOK}" != "null" ]; then

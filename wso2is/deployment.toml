@@ -58,3 +58,27 @@ notification_endpoint = "https://wso2am:9443/internal/data/v1/notify"
 username = "${admin.username}"
 password = "${admin.password}"
 'header.X-WSO2-KEY-MANAGER' = "WSO2 IS"
+
+# OAuth Token Configuration - Include user claims in JWT access tokens
+[oauth.token_validation]
+include_validation_context_as_jwt_in_reponse = "true"
+validation_response_jwt_validity = "15m"
+
+# Include user attributes in access tokens
+[oauth.oidc.user_info]
+claim_retriever = "default"
+user_endpoint_claim_cache.enable = true
+
+# JWT Token Generation - Include user claims
+[oauth.token_generation]
+access_token_type = "self_contained"
+access_token_value_type = "JWT"
+include_user_domain = false
+
+# User claim configuration for JWT tokens
+[[oauth.custom_claim_callback]]
+class = "org.wso2.carbon.identity.oauth2.token.OAuthDefaultTokenIssuerImpl"
+
+# Enable additional claims in JWT
+[oauth.oidc.claims]
+return_only_mapped_claims = false
